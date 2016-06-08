@@ -1,0 +1,9 @@
+*#*
+*#
+.ipynb_checkpoints/
+*~
+*.egg-info
+*.pyc
+a.out
+*.s
+target/
