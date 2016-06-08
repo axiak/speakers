@@ -78,8 +78,8 @@ int run_filter(AudioOptions audio_options)
     }
 
     int step_size = audio_options.filter_size - 1;
-    int step_data_size = step_size * 2;
-    int preamble = (audio_options.conv_multiple - 1) * step_size * 2;
+    int step_data_size = (audio_options.conv_multiple - 1) * step_size * 2;
+    int preamble = step_size * 2;
     int output_scale = audio_options.output_channels / 2;
 
     input_parameters.device = audio_options.input_device;
@@ -202,7 +202,7 @@ int main(int argc, char ** argv)
         1025,
         4,
         1024 * 1024,
-        0
+        1
     };
 
     audio_options.filters = (NUMERIC *)malloc(sizeof(NUMERIC) * 1025 * 3);

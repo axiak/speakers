@@ -101,6 +101,8 @@ void OSFilter_destroy(OSFilter * filter)
 void OSFilter_execute(OSFilter * filter)
 {
     int i;
+    float scaling_factor = 1 / (float)(filter->conv_length);
+
     for (int filter_idx = 0; filter_idx < filter->num_filters; ++filter_idx) {
         for (int channel_idx = 0; channel_idx < filter->num_channels; ++channel_idx) {
             // copy value into scratch
@@ -121,6 +123,12 @@ void OSFilter_execute(OSFilter * filter)
                             filter->cofilters[filter_idx]
                             );
 
+            // rescale
+            for (i = 0; i < filter->conv_length; ++i) {
+                filter->scratch->data[i][0] *= scaling_factor;
+                filter->scratch->data[i][1] *= scaling_factor;
+            }
+
             // IDFT: freq -> time domain
             fftwf_execute(filter->output_plan);
 
@@ -129,8 +137,8 @@ void OSFilter_execute(OSFilter * filter)
                 filter->striped_output[i * filter->num_channels * filter->num_filters +
                                        filter->num_filters * filter_idx +
                                        channel_idx] =
-                    //filter->scratch->data[i][0];
-                    filter->striped_input[i * filter->num_channels + channel_idx];
+                    filter->scratch->data[i][0];
+                    //filter->striped_input[i * filter->num_channels + channel_idx];
             }
         }
     }
