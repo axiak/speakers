@@ -110,7 +110,11 @@ int run_filter(AudioOptions audio_options)
     };
 
     output_parameters.device = audio_options.output_device;
-    output_parameters.channelCount = audio_options.output_channels;
+    if (audio_options.output_channels >= 6) {
+        output_parameters.channelCount = audio_options.output_channels + 2;
+    } else {
+        output_parameters.channelCount = audio_options.output_channels;
+    }
     output_parameters.sampleFormat = PA_SAMPLE_TYPE;
     output_parameters.suggestedLatency = Pa_GetDeviceInfo(output_parameters.device)->defaultHighOutputLatency;
     output_parameters.hostApiSpecificStreamInfo = NULL;

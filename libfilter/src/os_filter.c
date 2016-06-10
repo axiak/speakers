@@ -1,12 +1,20 @@
 #include <stdlib.h>
 #include <fftw3.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "vector.h"
 #include "os_filter.h"
 
 
+// We will skip 2 in the output because
+// 5.1 surround sound doesn't have 6 channels
+// so we have to skip channels 4-5.
+#define SKIP_FILTER_NUM (2)
+
+
 // private methods
+static int __OSFilter_effective_num_outputs(OSFilter * filter);
 void __OSFilter_copy_input(OSFilter * filter, const NUMERIC * input);
 void __OSFilter_init_cofilters(OSFilter * os_filter, const NUMERIC * filters, int filter_length);
 bool __OSFilter_create_vectors(Vector *** vector_ref, int num_vectors, int vector_length);
@@ -40,7 +48,7 @@ OSFilter * OSFilter_create(const NUMERIC * filters,
         return NULL;
     }
     // TODO - Figure out how to make this step_size length
-    if (!(filter->striped_output = (NUMERIC *)malloc(sizeof(NUMERIC) * conv_length * num_filters * num_channels))) {
+    if (!(filter->striped_output = (NUMERIC *)malloc(sizeof(NUMERIC) * conv_length * __OSFilter_effective_num_outputs(filter) * num_channels))) {
         OSFilter_destroy(filter);
         return NULL;
     }
@@ -105,7 +113,7 @@ void OSFilter_execute(OSFilter * filter, CircularBuffer * input, CircularBuffer 
 {
     int step_data_size = (filter->conv_length - filter->step_size) * 2;
     int preamble = filter->step_size * 2;
-    int output_scale = filter->num_filters;
+    int output_scale = __OSFilter_effective_num_outputs(filter);
 
     CircularBuffer_consume_blocking(
                                     input,
@@ -127,7 +135,14 @@ void __OSFilter_evaluate(OSFilter * filter)
     int i;
     float scaling_factor = 1 / (float)(filter->conv_length);
 
+    int effective_num_filters = __OSFilter_effective_num_outputs(filter);
+
+    memset(filter->striped_output, 0, sizeof(NUMERIC) * effective_num_filters * filter->conv_length * filter->num_channels);
+
     for (int filter_idx = 0; filter_idx < filter->num_filters; ++filter_idx) {
+        int effective_filter_idx = (filter_idx >= SKIP_FILTER_NUM) ?
+            filter_idx + 1 : filter_idx;
+
         for (int channel_idx = 0; channel_idx < filter->num_channels; ++channel_idx) {
             // copy value into scratch
             for (i = 0; i < filter->conv_length; ++i) {
@@ -158,11 +173,10 @@ void __OSFilter_evaluate(OSFilter * filter)
 
             // copy value out
             for (i = 0; i < filter->conv_length; ++i) {
-                filter->striped_output[i * filter->num_channels * filter->num_filters +
-                                       filter->num_filters * filter_idx +
+                filter->striped_output[i * filter->num_channels * effective_num_filters +
+                                       filter->num_channels * effective_filter_idx +
                                        channel_idx] =
                     filter->scratch->data[i][0];
-                    //filter->striped_input[i * filter->num_channels + channel_idx];
             }
         }
     }
@@ -194,6 +208,14 @@ void __OSFilter_init_cofilters(OSFilter * os_filter, const NUMERIC * filters, in
     Vector_destroy(fft_input);
 }
 
+static int __OSFilter_effective_num_outputs(OSFilter * filter)
+{
+    if (filter->num_filters >= (SKIP_FILTER_NUM + 1)) {
+        return filter->num_filters + 1;
+    } else {
+        return filter->num_filters;
+    }
+}
 
 bool __OSFilter_create_vectors(Vector *** vector_ref, int num_vectors, int vector_length)
 {

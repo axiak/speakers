@@ -29,19 +29,12 @@ def main():
 
     filter_size = 1025
     cutoff_freq = 300
-    cutoff_freq_2 = 2000
+    cutoff_freq_2 = 2500
     sample_freq = 48000
 
     transition_width = 125
 
-
     print "Building filters..."
-    print             [0, cutoff_freq - transition_width,
-             cutoff_freq + transition_width, sample_freq / 2],
-    print   [0, cutoff_freq - transition_width,
-             cutoff_freq + transition_width, cutoff_freq_2 - transition_width,
-             cutoff_freq_2 + transition_width, sample_freq / 2],
-          
 
     filters = [
         scipy.signal.remez(
@@ -63,13 +56,26 @@ def main():
             maxiter=100,
             grid_density=64
         ),
+        scipy.signal.remez(
+            filter_size,
+            [0, cutoff_freq_2 - transition_width,
+             cutoff_freq_2 + transition_width, sample_freq / 2],
+            [0, 1],
+            Hz=sample_freq,
+            maxiter=50
+        ),
     ]
+
+    #filters = filters[:2]
 
     #for filter_ in filters:
     #    filter_[0] = filter_[-1] = 0
 
-    plot_filter(filters[0], sample_freq)
-    plot_filter(filters[1], sample_freq)
+    try:
+        for filter_ in filters:
+            plot_filter(filter_, sample_freq)
+    except:
+        pass
 
     from filterlib import run_filter
 
@@ -77,7 +83,7 @@ def main():
         'filters': filters,
         'sample_rate': sample_freq,
         'input_device': 2,
-        'output_device': 2,
+        'output_device': 9,
         'print_debug': True
     })
 
