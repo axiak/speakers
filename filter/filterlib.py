@@ -34,7 +34,7 @@ CDLL(find_library("portaudio"), mode=RTLD_GLOBAL)
 CDLL(find_library("fftw3f"), mode=RTLD_GLOBAL)
 
 C = ffi.dlopen(
-    os.path.join(os.path.dirname(__file__), '..', 'libfilter', 'src', 'target', 'libfilter.so'),
+    os.path.join(os.path.dirname(__file__), '..', 'libfilter', 'target', 'libfilter.so'),
     RTLD_GLOBAL
 )
 
