@@ -1,5 +1,6 @@
 import sys
 import numpy
+import numpy as np
 import scipy.fftpack
 
 import scipy.signal
@@ -27,22 +28,48 @@ def main():
         """
 
     filter_size = 1025
-    cutoff_freq = 50
-    cutoff_freq_2 = 1600
+    cutoff_freq = 300
+    cutoff_freq_2 = 2000
     sample_freq = 48000
+
+    transition_width = 125
+
+
+    print "Building filters..."
+    print             [0, cutoff_freq - transition_width,
+             cutoff_freq + transition_width, sample_freq / 2],
+    print   [0, cutoff_freq - transition_width,
+             cutoff_freq + transition_width, cutoff_freq_2 - transition_width,
+             cutoff_freq_2 + transition_width, sample_freq / 2],
+          
 
     filters = [
         scipy.signal.remez(
             filter_size,
-            [0, cutoff_freq * 0.9, cutoff_freq * 1.1, sample_freq / 2],
-            [1, 1],
+            [0, cutoff_freq - transition_width,
+             cutoff_freq + transition_width, sample_freq / 2],
+            [1, 0],
             Hz=sample_freq,
             maxiter=100,
-            grid_density=32
+            grid_density=64
+        ),
+        scipy.signal.remez(
+            filter_size,
+            [0, cutoff_freq - transition_width,
+             cutoff_freq + transition_width, cutoff_freq_2 - transition_width,
+             cutoff_freq_2 + transition_width, sample_freq / 2],
+            [0, 1, 0],
+            Hz=sample_freq,
+            maxiter=100,
+            grid_density=64
         ),
     ]
 
-    #plot_filter(filters[0], sample_freq)
+    #for filter_ in filters:
+    #    filter_[0] = filter_[-1] = 0
+
+    plot_filter(filters[0], sample_freq)
+    plot_filter(filters[1], sample_freq)
 
     from filterlib import run_filter
 
@@ -50,12 +77,21 @@ def main():
         'filters': filters,
         'sample_rate': sample_freq,
         'input_device': 2,
-        'output_device': 2
+        'output_device': 2,
+        'print_debug': True
     })
 
 
 
 def plot_filter(filter_coefs, sample_freq):
+
+    #fig = pyplot.figure()
+    #ax1 = fig.add_subplot(111)
+    #freq, response = scipy.signal.freqz(filter_coefs)
+
+    #ax1.semilogy(freq / (2 * np.pi), np.abs(response), 'b-')
+    #pyplot.show()
+    #return
     t = numpy.linspace(0, float(len(filter_coefs - 1)) / sample_freq, len(filter_coefs))
     fig = pyplot.figure(figsize=(10, 10))
 
@@ -72,13 +108,13 @@ def plot_filter(filter_coefs, sample_freq):
     pyplot.semilogx(freq_hz, 20 * numpy.log10(numpy.abs(ampl)), 'b-')
     pyplot.grid(True)
     pyplot.ylabel('Amplitude (dB)')
-    ax2 = ax1.twinx()
-    pyplot.semilogx(freq_hz, 180 / numpy.pi * numpy.unwrap(numpy.angle(ampl)), 'r-')
-
     pyplot.legend(['Amplitude', 'Phase'], loc='upper right')
 
-    pyplot.xlabel('Frequency (Hz)')
+    ax1.twinx()
+    pyplot.semilogx(freq_hz, 180 / numpy.pi * numpy.unwrap(numpy.angle(ampl)), 'r-')
     pyplot.ylabel('Phase angle (deg)')
+    pyplot.xlabel('Frequency (Hz)')
+    pyplot.legend(['Phase'], loc='lower right')
     pyplot.title('Filter frequency response')
 
     print 'Please close figure window to continue'

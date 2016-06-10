@@ -85,7 +85,7 @@ int run_filter(AudioOptions audio_options)
     input_parameters.device = audio_options.input_device;
     input_parameters.channelCount = 2;
     input_parameters.sampleFormat = PA_SAMPLE_TYPE;
-    input_parameters.suggestedLatency = Pa_GetDeviceInfo(input_parameters.device)->defaultLowInputLatency;
+    input_parameters.suggestedLatency = Pa_GetDeviceInfo(input_parameters.device)->defaultHighInputLatency;
     input_parameters.hostApiSpecificStreamInfo = NULL;
 
     err = Pa_OpenStream(
@@ -115,7 +115,7 @@ int run_filter(AudioOptions audio_options)
     output_parameters.device = audio_options.output_device;
     output_parameters.channelCount = audio_options.output_channels;
     output_parameters.sampleFormat = PA_SAMPLE_TYPE;
-    output_parameters.suggestedLatency = Pa_GetDeviceInfo(output_parameters.device)->defaultLowOutputLatency;
+    output_parameters.suggestedLatency = Pa_GetDeviceInfo(output_parameters.device)->defaultHighOutputLatency;
     output_parameters.hostApiSpecificStreamInfo = NULL;
 
     printf("output channels: %d\n", output_parameters.channelCount);
