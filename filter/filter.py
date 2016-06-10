@@ -30,7 +30,7 @@ def main():
     filter_size = 1025
     cutoff_freq = 300
     cutoff_freq_2 = 2500
-    sample_freq = 48000
+    sample_freq = 44100
 
     transition_width = 125
 
@@ -86,7 +86,6 @@ def main():
         'output_device': 9,
         'print_debug': True
     })
-
 
 
 def plot_filter(filter_coefs, sample_freq):

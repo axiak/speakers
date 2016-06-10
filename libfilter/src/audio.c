@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <portaudio.h>
+#include <pa_linux_alsa.h>
 
 #include "audio.h"
 #include "common.h"
@@ -101,6 +102,8 @@ int run_filter(AudioOptions audio_options)
         goto done;
     }
 
+    PaAlsa_EnableRealtimeScheduling(input_stream, 1);
+
     if ((err = Pa_StartStream(input_stream)) != paNoError) {
         goto done;
     }
@@ -137,16 +140,20 @@ int run_filter(AudioOptions audio_options)
         goto done;
     }
 
+    PaAlsa_EnableRealtimeScheduling(output_stream, 1);
+
     if ((err = Pa_StartStream(output_stream)) != paNoError) {
         goto done;
     }
+
+    int output_scale = output_parameters.channelCount / 2;
 
     while ((err = Pa_IsStreamActive(input_stream)) == 1 &&
            (err = Pa_IsStreamActive(output_stream)) == 1) {
         OSFilter_execute(filter, input_buffer, output_buffer);
         if (audio_options.print_debug) {
-            printf("%lu\t%lu\t%lu\n", input_buffer->offset_producer, output_buffer->offset_consumer,
-                   input_buffer->offset_producer - output_buffer->offset_consumer);
+            printf("%lu\t%lu\t%lu\n", input_buffer->offset_producer, output_buffer->offset_consumer / output_scale,
+                   input_buffer->offset_producer - output_buffer->offset_consumer / output_scale);
         }
     }
     if (err < 0) {
