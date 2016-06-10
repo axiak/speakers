@@ -24,6 +24,7 @@ typedef struct {
     int conv_multiple;
     int buffer_size;
     int print_debug;
+    float input_scale;
 } AudioOptions;
 
 
@@ -62,6 +63,7 @@ def run_filter(options):
             options.get('conv_multiple', 4),
             options.get('buffer_size', 1 << 20),
             int(bool(options.get('print_debug'))),
+            float(options.get('input_scale', 0.7071)),
         ))
     t = threading.Thread(target=actually_run)
     t.daemon = True

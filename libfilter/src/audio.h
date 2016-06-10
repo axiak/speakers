@@ -13,6 +13,7 @@ typedef struct {
     int conv_multiple;
     int buffer_size;
     int print_debug;
+    NUMERIC input_scale;
 } AudioOptions;
 
 

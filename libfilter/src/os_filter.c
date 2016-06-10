@@ -24,7 +24,8 @@ OSFilter * OSFilter_create(const NUMERIC * filters,
                            int num_filters,
                            int num_channels,
                            int filter_length,
-                           int conv_length)
+                           int conv_length,
+                           float input_scale)
 {
     OSFilter * filter = (OSFilter *)malloc(sizeof(OSFilter));
     if (!filter) {
@@ -38,6 +39,7 @@ OSFilter * OSFilter_create(const NUMERIC * filters,
     filter->num_channels = num_channels;
     filter->conv_length = conv_length;
     filter->step_size = filter_length - 1;
+    filter->input_scale = input_scale;
 
     if (!(filter->scratch = Vector_create(conv_length))) {
         OSFilter_destroy(filter);
@@ -47,11 +49,21 @@ OSFilter * OSFilter_create(const NUMERIC * filters,
         OSFilter_destroy(filter);
         return NULL;
     }
+
+    int effective_filter_size = __OSFilter_effective_num_outputs(filter);
+
     // TODO - Figure out how to make this step_size length
-    if (!(filter->striped_output = (NUMERIC *)malloc(sizeof(NUMERIC) * conv_length * __OSFilter_effective_num_outputs(filter) * num_channels))) {
+    if (!(filter->striped_output = (NUMERIC *)malloc(sizeof(NUMERIC) * conv_length * effective_filter_size  * num_channels))) {
         OSFilter_destroy(filter);
         return NULL;
     }
+    memset(
+           filter->striped_output,
+           0,
+           sizeof(NUMERIC) * conv_length * effective_filter_size * num_channels
+           );
+
+
     if (!(__OSFilter_create_vectors(&filter->cofilters, num_filters, conv_length))) {
         OSFilter_destroy(filter);
         return NULL;
@@ -137,8 +149,6 @@ void __OSFilter_evaluate(OSFilter * filter)
 
     int effective_num_filters = __OSFilter_effective_num_outputs(filter);
 
-    memset(filter->striped_output, 0, sizeof(NUMERIC) * effective_num_filters * filter->conv_length * filter->num_channels);
-
     for (int filter_idx = 0; filter_idx < filter->num_filters; ++filter_idx) {
         int effective_filter_idx = (filter_idx >= SKIP_FILTER_NUM) ?
             filter_idx + 1 : filter_idx;
@@ -146,9 +156,11 @@ void __OSFilter_evaluate(OSFilter * filter)
         for (int channel_idx = 0; channel_idx < filter->num_channels; ++channel_idx) {
             // copy value into scratch
             for (i = 0; i < filter->conv_length; ++i) {
-                filter->striped_input[i * filter->num_channels + channel_idx] *= .5;
                 filter->scratch->data[i][0] =
                     filter->striped_input[i * filter->num_channels + channel_idx];
+                filter->scratch->data[i][0] *= filter->input_scale;
+                // since this is a scratch, the imaginary part was probably set
+                // to a nonzero number previously
                 filter->scratch->data[i][1] = 0;
             }
 

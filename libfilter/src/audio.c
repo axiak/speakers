@@ -67,7 +67,8 @@ int run_filter(AudioOptions audio_options)
                         audio_options.num_filters,
                         2,
                         audio_options.filter_size,
-                        audio_options.conv_multiple * (audio_options.filter_size - 1)
+                        audio_options.conv_multiple * (audio_options.filter_size - 1),
+                        audio_options.input_scale
                         );
     if (!filter) {
         goto done;
@@ -104,11 +105,6 @@ int run_filter(AudioOptions audio_options)
         goto done;
     }
 
-    PlaybackCallbackData playback_data = {
-        output_buffer,
-        audio_options.output_channels
-    };
-
     output_parameters.device = audio_options.output_device;
     if (audio_options.output_channels >= 6) {
         output_parameters.channelCount = audio_options.output_channels + 2;
@@ -118,6 +114,11 @@ int run_filter(AudioOptions audio_options)
     output_parameters.sampleFormat = PA_SAMPLE_TYPE;
     output_parameters.suggestedLatency = Pa_GetDeviceInfo(output_parameters.device)->defaultHighOutputLatency;
     output_parameters.hostApiSpecificStreamInfo = NULL;
+
+    PlaybackCallbackData playback_data = {
+        output_buffer,
+        output_parameters.channelCount
+    };
 
     printf("output channels: %d\n", output_parameters.channelCount);
 
@@ -192,7 +193,8 @@ int main(int argc, char ** argv)
         1025,
         4,
         1024 * 1024,
-        1
+        1,
+        .5
     };
 
     audio_options.filters = (NUMERIC *)malloc(sizeof(NUMERIC) * 1025 * 3);
