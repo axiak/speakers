@@ -78,9 +78,6 @@ int run_filter(AudioOptions audio_options)
     }
 
     int step_size = audio_options.filter_size - 1;
-    int step_data_size = (audio_options.conv_multiple - 1) * step_size * 2;
-    int preamble = step_size * 2;
-    int output_scale = audio_options.output_channels / 2;
 
     input_parameters.device = audio_options.input_device;
     input_parameters.channelCount = 2;
@@ -141,18 +138,7 @@ int run_filter(AudioOptions audio_options)
 
     while ((err = Pa_IsStreamActive(input_stream)) == 1 &&
            (err = Pa_IsStreamActive(output_stream)) == 1) {
-        CircularBuffer_consume_blocking(
-                                        input_buffer,
-                                        filter->striped_input,
-                                        step_data_size,
-                                        preamble
-                                        );
-        OSFilter_execute(filter);
-        CircularBuffer_produce_blocking(
-                                        output_buffer,
-                                        filter->striped_output + preamble * output_scale,
-                                        step_data_size * output_scale
-                                        );
+        OSFilter_execute(filter, input_buffer, output_buffer);
         if (audio_options.print_debug) {
             printf("%lu\t%lu\t%lu\n", input_buffer->offset_producer, output_buffer->offset_consumer,
                    input_buffer->offset_producer - output_buffer->offset_consumer);

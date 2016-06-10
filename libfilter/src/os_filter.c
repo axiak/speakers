@@ -10,7 +10,7 @@
 void __OSFilter_copy_input(OSFilter * filter, const NUMERIC * input);
 void __OSFilter_init_cofilters(OSFilter * os_filter, const NUMERIC * filters, int filter_length);
 bool __OSFilter_create_vectors(Vector *** vector_ref, int num_vectors, int vector_length);
-
+void __OSFilter_evaluate(OSFilter * filter);
 
 OSFilter * OSFilter_create(const NUMERIC * filters,
                            int num_filters,
@@ -98,7 +98,31 @@ void OSFilter_destroy(OSFilter * filter)
     }
 }
 
-void OSFilter_execute(OSFilter * filter)
+
+
+
+void OSFilter_execute(OSFilter * filter, CircularBuffer * input, CircularBuffer * output)
+{
+    int step_data_size = (filter->conv_length - filter->step_size) * 2;
+    int preamble = filter->step_size * 2;
+    int output_scale = filter->num_filters;
+
+    CircularBuffer_consume_blocking(
+                                    input,
+                                    filter->striped_input,
+                                    step_data_size,
+                                    preamble
+                                    );
+    __OSFilter_evaluate(filter);
+    CircularBuffer_produce_blocking(
+                                    output,
+                                    filter->striped_output + preamble * output_scale,
+                                    step_data_size * output_scale
+                                    );
+}
+
+
+void __OSFilter_evaluate(OSFilter * filter)
 {
     int i;
     float scaling_factor = 1 / (float)(filter->conv_length);
