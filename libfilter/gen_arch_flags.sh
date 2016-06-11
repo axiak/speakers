@@ -16,4 +16,8 @@ for ARCH in $ARCH_LIST; do
     fi
 done
 
+if uname -a | grep -q -i linux; then
+    ARGS="$ARGS -DALSA_LINUX"
+fi
+
 echo $ARGS

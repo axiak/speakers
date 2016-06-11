@@ -1,12 +1,16 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <portaudio.h>
-#include <pa_linux_alsa.h>
 
 #include "audio.h"
 #include "common.h"
 #include "circular_buffer.h"
 #include "os_filter.h"
+
+#ifdef LINUX_ALSA
+#include <pa_linux_alsa.h>
+#endif
+
 
 static int recordCallback(const void *input_buffer,
                           void *output_buffer,
@@ -102,7 +106,9 @@ int run_filter(AudioOptions audio_options)
         goto done;
     }
 
+#ifdef LINUX_ALSA
     PaAlsa_EnableRealtimeScheduling(input_stream, 1);
+#endif
 
     if ((err = Pa_StartStream(input_stream)) != paNoError) {
         goto done;
@@ -140,7 +146,9 @@ int run_filter(AudioOptions audio_options)
         goto done;
     }
 
+#ifdef LINUX_ALSA
     PaAlsa_EnableRealtimeScheduling(output_stream, 1);
+#endif
 
     if ((err = Pa_StartStream(output_stream)) != paNoError) {
         goto done;
