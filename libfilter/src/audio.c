@@ -11,6 +11,7 @@
 #include <pa_linux_alsa.h>
 #endif
 
+#define DEBUG_PRINT_INTERVAL_MILLIS (1000)
 
 static int recordCallback(const void *input_buffer,
                           void *output_buffer,
@@ -155,13 +156,17 @@ int run_filter(AudioOptions audio_options)
     }
 
     int output_scale = output_parameters.channelCount / 2;
+    int frame_print_interval = DEBUG_PRINT_INTERVAL_MILLIS * audio_options.sample_rate / 1000;
+    int current_frame = 0;
 
     while ((err = Pa_IsStreamActive(input_stream)) == 1 &&
            (err = Pa_IsStreamActive(output_stream)) == 1) {
-        OSFilter_execute(filter, input_buffer, output_buffer);
-        if (audio_options.print_debug) {
+        current_frame += OSFilter_execute(filter, input_buffer, output_buffer);
+        if (audio_options.print_debug && current_frame > frame_print_interval) {
+            current_frame -= frame_print_interval;
             printf("%lu\t%lu\t%lu\n", input_buffer->offset_producer, output_buffer->offset_consumer / output_scale,
                    input_buffer->offset_producer - output_buffer->offset_consumer / output_scale);
+            fflush(stdout);
         }
     }
     if (err < 0) {

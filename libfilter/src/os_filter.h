@@ -35,5 +35,5 @@ OSFilter * OSFilter_create(const NUMERIC * filters,
 
 void OSFilter_destroy(OSFilter * filter);
 
-void OSFilter_execute(OSFilter * filter, CircularBuffer * input, CircularBuffer * output);
+int OSFilter_execute(OSFilter * filter, CircularBuffer * input, CircularBuffer * output);
 

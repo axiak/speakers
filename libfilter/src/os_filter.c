@@ -121,7 +121,7 @@ void OSFilter_destroy(OSFilter * filter)
 
 
 
-void OSFilter_execute(OSFilter * filter, CircularBuffer * input, CircularBuffer * output)
+int OSFilter_execute(OSFilter * filter, CircularBuffer * input, CircularBuffer * output)
 {
     int step_data_size = (filter->conv_length - filter->step_size) * 2;
     int preamble = filter->step_size * 2;
@@ -139,6 +139,7 @@ void OSFilter_execute(OSFilter * filter, CircularBuffer * input, CircularBuffer 
                                     filter->striped_output + preamble * output_scale,
                                     step_data_size * output_scale
                                     );
+    return step_data_size / 2;
 }
 
 
