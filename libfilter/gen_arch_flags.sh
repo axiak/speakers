@@ -14,6 +14,6 @@ for ARCH in $ARCH_LIST; do
         ARGS="$ARGS -march=$ARCH"
         break
     fi
-
 done
+
 echo $ARGS

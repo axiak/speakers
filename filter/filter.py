@@ -28,11 +28,12 @@ def main():
         """
 
     filter_size = 1025
-    cutoff_freq = 300
-    cutoff_freq_2 = 2500
+    cutoff_freq = 310
+    cutoff_freq_2 = 3000
     sample_freq = 44100
 
     transition_width = 125
+    transition_width_2 = 100
 
     print "Building filters..."
 
@@ -43,28 +44,31 @@ def main():
              cutoff_freq + transition_width, sample_freq / 2],
             [1, 0],
             Hz=sample_freq,
-            maxiter=100,
-            grid_density=64
+            maxiter=200,
+            grid_density=256
         ),
         scipy.signal.remez(
             filter_size,
             [0, cutoff_freq - transition_width,
-             cutoff_freq + transition_width, cutoff_freq_2 - transition_width,
-             cutoff_freq_2 + transition_width, sample_freq / 2],
+             cutoff_freq + transition_width, cutoff_freq_2 - transition_width_2,
+             cutoff_freq_2 + transition_width_2, sample_freq / 2],
             [0, 1, 0],
             Hz=sample_freq,
-            maxiter=100,
-            grid_density=64
+            maxiter=199,
+            grid_density=256
         ),
         scipy.signal.remez(
             filter_size,
-            [0, cutoff_freq_2 - transition_width,
-             cutoff_freq_2 + transition_width, sample_freq / 2],
+            [0, cutoff_freq_2 - transition_width_2,
+             cutoff_freq_2 + transition_width_2, sample_freq / 2],
             [0, 1],
             Hz=sample_freq,
-            maxiter=50
+            maxiter=201,
+            grid_density=256
         ),
     ]
+
+    filters = [scipy.fftpack.ifft(numpy.repeat(1, filter_size)), filters[0], filters[1]]
 
     #filters = filters[:2]
 
@@ -82,8 +86,8 @@ def main():
     run_filter({
         'filters': filters,
         'sample_rate': sample_freq,
-        'input_device': 2,
-        'output_device': 9,
+        'input_device': 3,
+        'output_device': 11,
         'print_debug': True
     })
 
@@ -109,14 +113,15 @@ def plot_filter(filter_coefs, sample_freq):
 
     ax1 = fig.add_subplot(212)
     (freq, ampl) = scipy.signal.freqz(filter_coefs)
-    freq_hz = freq * sample_freq / (2 * numpy.pi)
-    pyplot.semilogx(freq_hz, 20 * numpy.log10(numpy.abs(ampl)), 'b-')
+    freq_hz = (freq * sample_freq / (2 * numpy.pi))[1:]
+
+    pyplot.semilogx(freq_hz, 20 * numpy.log10(numpy.abs(ampl[1:])), 'b-')
     pyplot.grid(True)
     pyplot.ylabel('Amplitude (dB)')
     pyplot.legend(['Amplitude', 'Phase'], loc='upper right')
 
     ax1.twinx()
-    pyplot.semilogx(freq_hz, 180 / numpy.pi * numpy.unwrap(numpy.angle(ampl)), 'r-')
+    pyplot.semilogx(freq_hz, 180 / numpy.pi * numpy.unwrap(numpy.angle(ampl[1:])), 'r-')
     pyplot.ylabel('Phase angle (deg)')
     pyplot.xlabel('Frequency (Hz)')
     pyplot.legend(['Phase'], loc='lower right')
