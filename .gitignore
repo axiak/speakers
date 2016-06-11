@@ -7,3 +7,4 @@
 a.out
 *.s
 target/
+filter_cache
