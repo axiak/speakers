@@ -14,6 +14,7 @@ typedef struct {
     int buffer_size;
     int print_debug;
     NUMERIC input_scale;
+    const char * wav_path;
 } AudioOptions;
 
 

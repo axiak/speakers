@@ -9,7 +9,7 @@ SRC = ./src
 OPTFLAGS = -O3 -ffast-math
 DEBUG_FLAGS = -g -O0
 
-LIBS = -lfftw3f -lportaudio -lm
+LIBS = -lfftw3f -lportaudio -lm -lsndfile
 
 ARCH_FLAGS = $(shell ./gen_arch_flags.sh)
 

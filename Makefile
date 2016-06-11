@@ -23,4 +23,4 @@ install-deps-apt:
 	apt-get install -y build-essential python python-pyaudio portaudio19-dev \
 		libfftw3-dev libfftw3-bin libfftw3-single3 \
 		python-pyalsa python-numpy python-scipy python-matplotlib python-matplotlib-data \
-		ipython python-cffi python-leveldb
+		ipython python-cffi python-leveldb libsndfile1-dev

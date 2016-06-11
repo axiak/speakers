@@ -8,12 +8,32 @@
 
 ### Install deps
 
+
+#### Apt
+
 We currently have a make command to install dependencies from apt:
 
 ```bash
 cd speakers
 sudo make install-deps-apt
 ```
+
+
+#### Manually
+
+The following dependencies are needed to build the C library:
+
+- [PortAudio](http://www.portaudio.com/)
+- [FFTW3](http://www.fftw.org/)
+- [libsndfile](http://www.mega-nerd.com/libsndfile/)
+
+The following command should get your python environment set up:
+
+```bash
+$ cd speakers
+$ pip install -e .
+```
+
 
 ### Build *libfilter*
 

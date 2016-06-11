@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <portaudio.h>
+#include <sndfile.h>
 
 #include "audio.h"
 #include "common.h"
@@ -12,6 +14,7 @@
 #endif
 
 #define DEBUG_PRINT_INTERVAL_MILLIS (1000)
+#define WAV_BUFFER_SIZE (32768)
 
 static int recordCallback(const void *input_buffer,
                           void *output_buffer,
@@ -86,33 +89,58 @@ int run_filter(AudioOptions audio_options)
 
     int step_size = audio_options.filter_size - 1;
 
-    input_parameters.device = audio_options.input_device;
-    input_parameters.channelCount = 2;
-    input_parameters.sampleFormat = PA_SAMPLE_TYPE;
-    input_parameters.suggestedLatency = Pa_GetDeviceInfo(input_parameters.device)->defaultHighInputLatency;
-    input_parameters.hostApiSpecificStreamInfo = NULL;
+    if (!audio_options.wav_path || !strlen(audio_options.wav_path)) {
+        input_parameters.device = audio_options.input_device;
+        input_parameters.channelCount = 2;
+        input_parameters.sampleFormat = PA_SAMPLE_TYPE;
+        input_parameters.suggestedLatency = Pa_GetDeviceInfo(input_parameters.device)->defaultHighInputLatency;
+        input_parameters.hostApiSpecificStreamInfo = NULL;
 
-    err = Pa_OpenStream(
-                        &input_stream,
-                        &input_parameters,
-                        NULL,
-                        audio_options.sample_rate,
-                        step_size,
-                        paNoFlag,
-                        recordCallback,
-                        input_buffer
-                        );
+        err = Pa_OpenStream(
+                            &input_stream,
+                            &input_parameters,
+                            NULL,
+                            audio_options.sample_rate,
+                            step_size,
+                            paNoFlag,
+                            recordCallback,
+                            input_buffer
+                            );
 
-    if (err != paNoError) {
-        goto done;
-    }
+        if (err != paNoError) {
+            goto done;
+        }
+
 
 #ifdef LINUX_ALSA
-    PaAlsa_EnableRealtimeScheduling(input_stream, 1);
+        PaAlsa_EnableRealtimeScheduling(input_stream, 1);
 #endif
 
-    if ((err = Pa_StartStream(input_stream)) != paNoError) {
-        goto done;
+        if ((err = Pa_StartStream(input_stream)) != paNoError) {
+            goto done;
+        }
+    } else {
+        SF_INFO sf_info;
+        SNDFILE *wav_file;
+        if (!(wav_file = sf_open(audio_options.wav_path, SFM_READ, &sf_info))) {
+            printf("Could not open wav file: %s\n", audio_options.wav_path);
+            fflush(stdout);
+            goto done;
+        }
+
+
+        float * buffer = (float *)malloc(sizeof(float) * WAV_BUFFER_SIZE);
+        if (!buffer) {
+            sf_close(wav_file);
+            goto done;
+        }
+
+        int readcount;
+        while ((readcount = sf_read_float(wav_file, buffer, WAV_BUFFER_SIZE))) {
+            CircularBuffer_produce_blocking(input_buffer, buffer, readcount);
+        }
+        free(buffer);
+        sf_close(wav_file);
     }
 
     output_parameters.device = audio_options.output_device;
@@ -159,8 +187,13 @@ int run_filter(AudioOptions audio_options)
     int frame_print_interval = DEBUG_PRINT_INTERVAL_MILLIS * audio_options.sample_rate / 1000;
     int current_frame = 0;
 
-    while ((err = Pa_IsStreamActive(input_stream)) == 1 &&
-           (err = Pa_IsStreamActive(output_stream)) == 1) {
+    while (true) {
+        if ((err = Pa_IsStreamActive(output_stream)) != 1) {
+            break;
+        }
+        if (input_stream && (err = Pa_IsStreamActive(input_stream)) != 1) {
+            break;
+        }
         current_frame += OSFilter_execute(filter, input_buffer, output_buffer);
         if (audio_options.print_debug && current_frame > frame_print_interval) {
             current_frame -= frame_print_interval;

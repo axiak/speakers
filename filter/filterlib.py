@@ -25,6 +25,7 @@ typedef struct {
     int buffer_size;
     int print_debug;
     float input_scale;
+    const char * wav_file;
 } AudioOptions;
 
 
@@ -33,6 +34,7 @@ int run_filter(AudioOptions audioOptions);
 
 CDLL(find_library("portaudio"), mode=RTLD_GLOBAL)
 CDLL(find_library("fftw3f"), mode=RTLD_GLOBAL)
+CDLL(find_library("sndfile"), mode=RTLD_GLOBAL)
 
 C = ffi.dlopen(
     os.path.join(os.path.dirname(__file__), '..', 'libfilter', 'target', 'libfilter.so'),
@@ -52,6 +54,8 @@ def run_filter(options):
     ])
 
     def actually_run():
+        wav_file = ffi.new('char[]', options.get('wav_file', ''))
+
         C.run_filter((
             options.get('sample_rate', 48000),
             options.get('input_device', 2),
@@ -61,9 +65,10 @@ def run_filter(options):
             len(filters),
             len(filters[0]),
             options.get('conv_multiple', 4),
-            options.get('buffer_size', 1 << 20),
+            options.get('buffer_size', 10 * (1 << 20)),
             int(bool(options.get('print_debug'))),
             float(options.get('input_scale', 0.7071)),
+            wav_file
         ))
     t = threading.Thread(target=actually_run)
     t.daemon = True

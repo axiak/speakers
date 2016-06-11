@@ -10,8 +10,9 @@ def main():
 
     filters = build_iir_filters(filter_factory)
 
-    filters = [filter_factory.allpass()] * 3
+    #filters = [filter_factory.allpass()] * 3
 
+    filters = filters[:1]
 
     try:
         for filter_ in filters:
@@ -21,14 +22,13 @@ def main():
 
     from filterlib import run_filter
 
-    time.sleep(10)
-
     run_filter({
         'filters': [numpy.abs(f.coefficients) for f in filters],
         'sample_rate': filter_factory.sample_freq,
-        'input_device': 3,
-        'output_device': 11,
-        'print_debug': True
+        #'input_device': 8,
+        'output_device': 1,
+        'print_debug': True,
+        'wav_file': '/home/axiak/Documents/a2002011001-e02.wav'
     })
 
 
