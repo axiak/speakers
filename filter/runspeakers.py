@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import numpy
 from filter import FilterFactory
 
 
@@ -20,8 +21,10 @@ def main():
 
     from filterlib import run_filter
 
+    time.sleep(10)
+
     run_filter({
-        'filters': [f.coefficients for f in filters],
+        'filters': [numpy.abs(f.coefficients) for f in filters],
         'sample_rate': filter_factory.sample_freq,
         'input_device': 3,
         'output_device': 11,

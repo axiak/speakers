@@ -191,9 +191,10 @@ done:
     OSFilter_destroy(filter);
 
     if (err != paNoError) {
-        fprintf(stderr, "An error occured while using the portaudio stream\n");
-        fprintf(stderr, "Error number: %d\n", err);
-        fprintf(stderr, "Error message: %s\n", Pa_GetErrorText(err));
+        fprintf(stdout, "An error occured while using the portaudio stream\n");
+        fprintf(stdout, "Error number: %d\n", err);
+        fprintf(stdout, "Error message: %s\n", Pa_GetErrorText(err));
+        fflush(stdout);
         err = 1;
     }
     return err;
