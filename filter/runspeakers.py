@@ -7,8 +7,10 @@ def main():
 
     filters = build_remez_filters(filter_factory)
 
-    #filters = [filter_factory.allpass()] * 3
     filters = build_iir_filters(filter_factory)
+
+    filters = [filter_factory.allpass()] * 3
+
 
     try:
         for filter_ in filters:

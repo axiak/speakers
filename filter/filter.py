@@ -84,6 +84,7 @@ def filter_cache(method):
         if cached_value is None:
             cached_value = method(self, *args, **kwargs)
             __filter_db[key] = cached_value
+            __filter_db.sync()
         return cached_value
     return wrapper
 
