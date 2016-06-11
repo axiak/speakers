@@ -164,8 +164,13 @@ int run_filter(AudioOptions audio_options)
         current_frame += OSFilter_execute(filter, input_buffer, output_buffer);
         if (audio_options.print_debug && current_frame > frame_print_interval) {
             current_frame -= frame_print_interval;
-            printf("%lu\t%lu\t%lu\n", input_buffer->offset_producer, output_buffer->offset_consumer / output_scale,
-                   input_buffer->offset_producer - output_buffer->offset_consumer / output_scale);
+            int frame_difference = (input_buffer->offset_producer - output_buffer->offset_consumer / output_scale) / 2;
+            float lag = (float)(frame_difference) / audio_options.sample_rate * 1000;
+            printf("%lu\t%lu\t%d\t%fms\n",
+                   input_buffer->offset_producer,
+                   output_buffer->offset_consumer / output_scale,
+                   frame_difference, lag
+                   );
             fflush(stdout);
         }
     }
