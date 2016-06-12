@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import numpy
-from filter import FilterFactory
+from filters import FilterFactory
 
 
 def main():
@@ -10,13 +10,13 @@ def main():
 
     filters = build_iir_filters(filter_factory)
 
-    #filters = [filter_factory.allpass()] * 3
+    filters = [filter_factory.allpass()] * 3
 
-    filters = filters[:1]
+    #filters = filters[:1]
 
     try:
         for filter_ in filters:
-            filter_.plot_filter()
+            filter_.plot()
     except:
         pass
 
@@ -25,10 +25,11 @@ def main():
     run_filter({
         'filters': [numpy.abs(f.coefficients) for f in filters],
         'sample_rate': filter_factory.sample_freq,
-        #'input_device': 8,
-        'output_device': 1,
+        #'input_device': 9,
+        'input_device': 0,
+        'output_device': 7,
         'print_debug': True,
-        'wav_file': '/home/axiak/Documents/a2002011001-e02.wav'
+        #'wav_file': '/home/axiak/Documents/a2002011001-e02.wav'
     })
 
 

@@ -19,7 +19,37 @@ class Filter(object):
         self.sample_freq = sample_freq
         self.coefficients = coefficients
 
-    def plot_filter(self, output_file=None, prompt=True):
+    def __add__(self, other):
+        self.__assert_compatible(other)
+        return Filter(
+            "{0}_add_{1}".format(*tuple(sorted([self.filter_type, other.filter_type]))),
+            "{0} + {1}".format(self.name, other.name),
+            self.sample_freq,
+            self.coefficients + other.coefficients
+        )
+
+    def __mul__(self, other):
+        self.__assert_compatible(other)
+        coefs = scipy.signal.convolve(self.coefficients, other.coefficients, mode='same')
+
+        return Filter(
+            "{0}_conv_{1}".format(*tuple(sorted([self.filter_type, other.filter_type]))),
+            "{0} * {1}".format(self.name, other.name),
+            self.sample_freq,
+            coefs
+        )
+
+    def __assert_compatible(self, other):
+        if self.sample_freq != other.sample_freq:
+            raise Exception("Cannot add two filters of different sample rate: {0} =/= {1}".format(
+                self, other
+            ))
+        if len(self.coefficients) != len(self.coefficients):
+            raise Exception("Cannot add two filters of different size: {0} =/= {1}".format(
+                self, other
+            ))
+
+    def plot(self, output_file=None, prompt=True):
         filter_coefs = self.coefficients
         t = numpy.linspace(0, float(len(filter_coefs - 1)) / self.sample_freq, len(filter_coefs))
         fig = pyplot.figure(figsize=(10, 10))
@@ -67,7 +97,7 @@ class Filter(object):
         )
 
     def _repr_html_(self):
-        self.plot_filter(prompt=False)
+        self.plot(prompt=False)
 
 
 __filter_db = shelve.open(os.path.join(os.path.dirname(__file__), 'filter_cache'))
@@ -77,6 +107,8 @@ def filter_cache(method):
     @wraps(method)
     def wrapper(*args, **kwargs):
         method_name = method.__name__
+        if kwargs.pop('nocache', False):
+            return method(*args, **kwargs)
         self, args = args[0], args[1:]
         factory_args = sorted(self.__dict__.items())
         key = pickle.dumps((method_name, factory_args, args, sorted(kwargs.items())))
@@ -145,7 +177,8 @@ class FilterFactory(object):
     @filter_cache
     def hilbert_filter(self, signal, name=None):
         coefs = scipy.signal.hilbert(signal)
-        coefs /= coefs.sum()
+        #coefs /= coefs.sum()
+        coefs = scipy.fftpack.ifft(numpy.imag(coefs))
         return Filter(
             'hilbert',
             name,
