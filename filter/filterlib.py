@@ -1,4 +1,6 @@
 import os
+import time
+import thread
 import threading
 import numpy as np
 from ctypes.util import find_library
@@ -26,6 +28,8 @@ typedef struct {
     int print_debug;
     float input_scale;
     const char * wav_file;
+    float lag_reset_limit;
+    long parent_thread_ident;
 } AudioOptions;
 
 
@@ -43,6 +47,8 @@ C = ffi.dlopen(
 
 
 def run_filter(options):
+    wait_if_necessary()
+
     filters = options.get('filters', ())
     assert filters, "Required a filters parameter."
     assert all(len(filter_) == len(filters[0])
@@ -52,6 +58,7 @@ def run_filter(options):
         np.array(filter_, dtype=np.float32)
         for filter_ in filters
     ])
+
 
     def actually_run():
         wav_file = ffi.new('char[]', options.get('wav_file', ''))
@@ -68,10 +75,25 @@ def run_filter(options):
             options.get('buffer_size', 10 * (1 << 20)),
             int(bool(options.get('print_debug'))),
             float(options.get('input_scale', 0.7071)),
-            wav_file
+            wav_file,
+            float(options.get('lag_reset_limit', 0.060)),
+            thread.get_ident()
         ))
+
     t = threading.Thread(target=actually_run)
+
     t.daemon = True
     t.start()
     while t.is_alive():
         t.join(0.10)
+
+
+def wait_if_necessary():
+    try:
+        with open('/proc/uptime', 'r') as f:
+            uptime_seconds = float(f.readline().split()[0])
+        if uptime_seconds < 45:
+            print "Waiting 10 seconds to give ALSA a chance."
+            time.sleep(10)
+    except:
+        pass

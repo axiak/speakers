@@ -147,6 +147,17 @@ void CircularBuffer_consume_blocking(CircularBuffer * buf, NUMERIC * target, int
 }
 
 
+void CircularBuffer_fastforward(CircularBuffer * buf, int distance_from_end)
+{
+    pthread_mutex_lock(&buf->offset_mutex);
+
+    buf->offset_consumer = buf->offset_producer - distance_from_end;
+
+    pthread_cond_signal(&buf->offset_condition);
+    pthread_mutex_unlock(&buf->offset_mutex);
+}
+
+
 #ifdef BUFFER_MAIN
 
 int main(int argc, char ** argv)

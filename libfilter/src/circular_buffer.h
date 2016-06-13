@@ -24,3 +24,6 @@ void CircularBuffer_produce_blocking(CircularBuffer * circular_buffer, const NUM
 
 bool CircularBuffer_consume(CircularBuffer * circular_buffer, NUMERIC * target, int length, int preamble);
 void CircularBuffer_consume_blocking(CircularBuffer * circular_buffer, NUMERIC * target, int length, int preamble);
+
+void CircularBuffer_fastforward(CircularBuffer * circular_buffer, int distance_from_end);
+

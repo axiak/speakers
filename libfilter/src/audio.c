@@ -3,6 +3,9 @@
 #include <string.h>
 #include <portaudio.h>
 #include <sndfile.h>
+#include <pthread.h>
+#include <signal.h>
+#include <errno.h>
 
 #include "audio.h"
 #include "common.h"
@@ -60,6 +63,7 @@ static int playCallback(const void *input_buffer,
     return paContinue;
 }
 
+int is_parent_running(pthread_t parent_tid);
 
 int run_filter(AudioOptions audio_options)
 {
@@ -150,7 +154,7 @@ int run_filter(AudioOptions audio_options)
         output_parameters.channelCount = audio_options.output_channels;
     }
     output_parameters.sampleFormat = PA_SAMPLE_TYPE;
-    output_parameters.suggestedLatency = Pa_GetDeviceInfo(output_parameters.device)->defaultHighOutputLatency;
+    output_parameters.suggestedLatency = Pa_GetDeviceInfo(output_parameters.device)->defaultLowOutputLatency;
     output_parameters.hostApiSpecificStreamInfo = NULL;
 
     PlaybackCallbackData playback_data = {
@@ -197,6 +201,16 @@ int run_filter(AudioOptions audio_options)
         current_frame += OSFilter_execute(filter, input_buffer, output_buffer);
         if (audio_options.print_debug && current_frame > frame_print_interval) {
             current_frame -= frame_print_interval;
+
+            if (!is_parent_running(audio_options.parent_thread_ident)) {
+                printf("Parent thread is dead. Shutting down now.\n");
+                fflush(stdout);
+                goto done;
+            }
+
+            if (!audio_options.print_debug) {
+                continue;
+            }
             int frame_difference = (input_buffer->offset_producer - output_buffer->offset_consumer / output_scale) / 2;
             float lag = (float)(frame_difference) / audio_options.sample_rate * 1000;
             printf("%lu\t%lu\t%d\t%fms\n",
@@ -204,6 +218,11 @@ int run_filter(AudioOptions audio_options)
                    output_buffer->offset_consumer / output_scale,
                    frame_difference, lag
                    );
+            if (lag > audio_options.lag_reset_limit * 1000) {
+                printf("Resetting to latest due to high lag.\n");
+                CircularBuffer_fastforward(input_buffer, audio_options.filter_size * 2 * audio_options.conv_multiple);
+                CircularBuffer_fastforward(output_buffer, 0);
+            }
             fflush(stdout);
         }
     }
@@ -231,6 +250,11 @@ done:
         err = 1;
     }
     return err;
+}
+
+int is_parent_running(pthread_t parent_tid)
+{
+    return pthread_kill(parent_tid, 0) != ESRCH;
 }
 
 

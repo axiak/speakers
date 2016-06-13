@@ -1,5 +1,7 @@
 #pragma once
 
+#include <pthread.h>
+
 #include "common.h"
 
 typedef struct {
@@ -15,6 +17,8 @@ typedef struct {
     int print_debug;
     NUMERIC input_scale;
     const char * wav_path;
+    float lag_reset_limit;
+    pthread_t parent_thread_ident;
 } AudioOptions;
 
 
