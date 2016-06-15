@@ -6,6 +6,10 @@
 
 #include "circular_buffer.h"
 
+static inline int __index(CircularBuffer * circular_buffer, long index);
+static inline int __mod(long a, long b);
+
+
 CircularBuffer * CircularBuffer_create(int capacity)
 {
     CircularBuffer * buffer = (CircularBuffer *)malloc(sizeof(CircularBuffer));
@@ -43,12 +47,6 @@ void CircularBuffer_destroy(CircularBuffer * circular_buffer)
     }
 }
 
-static inline int __index(CircularBuffer * circular_buffer, long index)
-{
-    return index < circular_buffer->capacity ?
-        (int)index : (int)(index % circular_buffer->capacity);
-}
-
 
 bool CircularBuffer_produce(CircularBuffer * buf, const NUMERIC * data, int length)
 {
@@ -78,14 +76,6 @@ bool CircularBuffer_produce(CircularBuffer * buf, const NUMERIC * data, int leng
 
 void CircularBuffer_produce_blocking(CircularBuffer * buf, const NUMERIC * data, int length)
 {
-    pthread_mutex_lock(&buf->offset_mutex);
-    int check_counter = 0;
-    while (buf->offset_consumer + length + buf->capacity <= buf->offset_producer) {
-        pthread_cond_wait(&buf->offset_condition, &buf->offset_mutex);
-        if (++check_counter > BLOCK_ABORT) {
-            exit(-1);
-        }
-    }
     int start_index = __index(buf, buf->offset_producer);
     pthread_mutex_unlock(&buf->offset_mutex);
 
@@ -147,6 +137,14 @@ void CircularBuffer_consume_blocking(CircularBuffer * buf, NUMERIC * target, int
 }
 
 
+long CircularBuffer_lag(CircularBuffer * buf)
+{
+    pthread_mutex_lock(&buf->offset_mutex);
+    long result = buf->offset_producer - buf->offset_consumer;
+    pthread_mutex_unlock(&buf->offset_mutex);
+    return result;
+}
+
 void CircularBuffer_fastforward(CircularBuffer * buf, int distance_from_end)
 {
     pthread_mutex_lock(&buf->offset_mutex);
@@ -157,6 +155,24 @@ void CircularBuffer_fastforward(CircularBuffer * buf, int distance_from_end)
     pthread_mutex_unlock(&buf->offset_mutex);
 }
 
+
+static inline int __index(CircularBuffer * circular_buffer, long index)
+{
+    return __mod(index, circular_buffer->capacity);
+}
+
+static inline int __mod(long a, long b)
+{
+    if (a < 0) {
+        if (b < 0) {
+            return __mod(-a, -b);
+        }
+        while (a < 0) {
+            a += b;
+        }
+    }
+    return a % b;
+}
 
 #ifdef BUFFER_MAIN
 

@@ -30,6 +30,7 @@ setup(
         "pyaudio",
         "matplotlib",
         "cffi",
+        "picos",
     ],
     entry_points={
         'console_scripts': [

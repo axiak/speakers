@@ -2,6 +2,7 @@ import os
 import numpy
 import shelve
 import pickle
+import scipy.fftpack
 import scipy.signal
 from functools import wraps
 from matplotlib import pyplot
@@ -185,6 +186,97 @@ class FilterFactory(object):
             self.sample_freq,
             coefs
         )
+
+    def optimization_filter(self, signal, optimization_order=None, name=None, disp=False, maxIter=100):
+        if optimization_order is None:
+            optimization_order = self.filter_size * 4
+
+        if isinstance(signal, dict):
+            signal_func = self.__signal_from_dict(signal)
+        else:
+            signal_func = self.__signal_from_center(signal)
+
+        target_response = signal_func(numpy.linspace(0, self.sample_freq, optimization_order))
+        target_no_dc = target_response[1:]
+
+        def cost_function(vector):
+            freq, ampl = scipy.signal.freqz(numpy.real(vector), worN=len(target_response))
+            cost = max(numpy.abs(target_no_dc - numpy.abs(freq[1:])))
+            # Todo - minimize phase changes
+            return cost
+
+        result = scipy.optimize.minimize(cost_function,
+                                         scipy.fftpack.ifft(target_response),
+                                         options=dict(
+                                             disp=disp,
+                                             maxiter=maxIter
+                                         ))
+
+        f = Filter(
+            'testing',
+            name,
+            self.sample_freq,
+            result.x
+        )
+        f.result = result
+        return f
+
+    def spectral_factorization(self, coefficients):
+        """
+        See http://cvxr.com/cvx/examples/filter_design/html/spectral_fact.html
+        """
+        n = len(coefficients)
+        multiple = 100
+        m = self.filter_size * multiple
+
+        w = (self.sample_freq * numpy.arange(0, m) / m).reshape(-1, 1)
+
+        R = numpy.hstack([
+            numpy.ones((m, 1)),
+            2 * numpy.cos(numpy.kron(w, numpy.arange(1, n).reshape(-1, 1).transpose()))
+        ]) * numpy.array(coefficients)
+
+        alpha = 1 / 2.0 * numpy.log(R)
+
+        # hibert transform
+        alpha_tmp = scipy.fftpack.fft(alpha)
+        alpha_tmp[int(m / 2.0) + 1:m] = -alpha_tmp[int(m / 2.0) + 1:m]
+        alpha_tmp[1] = 0
+        alpha_tmp[int(m / 2.0) + 1] = 0
+        phi = numpy.real(scipy.fftpack.ifft(1j * alpha_tmp))
+
+        indexes = numpy.array([i for i in range(m)
+                               if i % multiple == 0])
+        alpha1 = alpha[indexes]
+        phi1 = phi[indexes]
+
+        return numpy.real(scipy.fftpack.ifft(numpy.exp(alpha1 + 1j * phi1), n))[0]
+
+    def __signal_from_dict(self, signal):
+        if self.sample_freq / 2.0 not in signal:
+            signal[self.sample_freq / 2.0] = max(signal.items())[1]
+        items = signal.items()
+
+        return self.__symmetric_signal_function(scipy.interpolate.interp1d(
+            [item[0] for item in items],
+            [item[1] for item in items]
+        ))
+
+    def __signal_from_center(self, signal):
+        return self.__symmetric_signal_function(scipy.interpolate.interp1d(
+            numpy.linspace(0, self.sample_freq / 2., len(signal)),
+            signal
+        ))
+
+    def __symmetric_signal_function(self, half_function):
+        half_point = self.sample_freq / 2.
+
+        def result(x):
+            if x <= half_point:
+                return half_function(x)
+            else:
+                return half_function(self.sample_freq - x)
+        return numpy.vectorize(result)
 
     def close(self):
         __filter_db.sync()

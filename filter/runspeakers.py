@@ -17,6 +17,8 @@ def main():
     try:
         for filter_ in filters:
             filter_.plot()
+
+        reduce(lambda a, b: a + b, filters).plot()
     except:
         pass
 
@@ -27,17 +29,16 @@ def main():
     run_filter({
         'filters': [numpy.real(f.coefficients) for f in filters],
         'sample_rate': filter_factory.sample_freq,
-        #'input_device': 9,
-        'input_device': 0,
+        'input_device': 9,
         'output_device': 7,
-        'print_debug': True
+        'print_debug': True,
         #'wav_file': '/home/axiak/Documents/a2002011001-e02.wav'
     })
 
 
 def build_iir_filters(filter_factory):
     cutoff_freq = 310
-    cutoff_freq_2 = 3000
+    cutoff_freq_2 = 2800
 
     return [
         filter_factory.butter_filter(

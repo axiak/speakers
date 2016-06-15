@@ -26,4 +26,4 @@ bool CircularBuffer_consume(CircularBuffer * circular_buffer, NUMERIC * target, 
 void CircularBuffer_consume_blocking(CircularBuffer * circular_buffer, NUMERIC * target, int length, int preamble);
 
 void CircularBuffer_fastforward(CircularBuffer * circular_buffer, int distance_from_end);
-
+long CircularBuffer_lag(CircularBuffer * circular_buffer);

@@ -6,6 +6,8 @@
 #include <pthread.h>
 #include <signal.h>
 #include <errno.h>
+#include <sys/stat.h>
+
 
 #include "audio.h"
 #include "common.h"
@@ -18,6 +20,9 @@
 
 #define DEBUG_PRINT_INTERVAL_MILLIS (1000)
 #define WAV_BUFFER_SIZE (32768)
+
+
+CircularBuffer * __read_audio_file(AudioOptions audio_options);
 
 static int recordCallback(const void *input_buffer,
                           void *output_buffer,
@@ -70,9 +75,9 @@ int run_filter(AudioOptions audio_options)
     PaStreamParameters input_parameters, output_parameters;
     PaStream *input_stream = NULL, *output_stream = NULL;
     PaError err = paNoError;
-
-    CircularBuffer * input_buffer = CircularBuffer_create(audio_options.buffer_size);
     CircularBuffer * output_buffer = CircularBuffer_create(audio_options.buffer_size);
+    CircularBuffer * input_buffer = NULL;
+    int live_stream = !audio_options.wav_path || !strlen(audio_options.wav_path);
 
     OSFilter * filter =
         OSFilter_create(
@@ -93,7 +98,9 @@ int run_filter(AudioOptions audio_options)
 
     int step_size = audio_options.filter_size - 1;
 
-    if (!audio_options.wav_path || !strlen(audio_options.wav_path)) {
+
+    if (live_stream) {
+        input_buffer = CircularBuffer_create(audio_options.buffer_size);
         input_parameters.device = audio_options.input_device;
         input_parameters.channelCount = 2;
         input_parameters.sampleFormat = PA_SAMPLE_TYPE;
@@ -124,27 +131,7 @@ int run_filter(AudioOptions audio_options)
             goto done;
         }
     } else {
-        SF_INFO sf_info;
-        SNDFILE *wav_file;
-        if (!(wav_file = sf_open(audio_options.wav_path, SFM_READ, &sf_info))) {
-            printf("Could not open wav file: %s\n", audio_options.wav_path);
-            fflush(stdout);
-            goto done;
-        }
-
-
-        float * buffer = (float *)malloc(sizeof(float) * WAV_BUFFER_SIZE);
-        if (!buffer) {
-            sf_close(wav_file);
-            goto done;
-        }
-
-        int readcount;
-        while ((readcount = sf_read_float(wav_file, buffer, WAV_BUFFER_SIZE))) {
-            CircularBuffer_produce_blocking(input_buffer, buffer, readcount);
-        }
-        free(buffer);
-        sf_close(wav_file);
+        input_buffer = __read_audio_file(audio_options);
     }
 
     output_parameters.device = audio_options.output_device;
@@ -211,16 +198,17 @@ int run_filter(AudioOptions audio_options)
             if (!audio_options.print_debug) {
                 continue;
             }
-            int frame_difference = (input_buffer->offset_producer - output_buffer->offset_consumer / output_scale) / 2;
+            long frame_difference = (CircularBuffer_lag(input_buffer) + CircularBuffer_lag(output_buffer) / output_scale) / 2;
             float lag = (float)(frame_difference) / audio_options.sample_rate * 1000;
-            printf("%lu\t%lu\t%d\t%fms\n",
+            printf("%lu\t%lu\t%lu\t%fms\n",
                    input_buffer->offset_producer,
                    output_buffer->offset_consumer / output_scale,
                    frame_difference, lag
                    );
-            if (lag > audio_options.lag_reset_limit * 1000) {
+
+            if (live_stream && (lag > audio_options.lag_reset_limit * 1000)) {
                 printf("Resetting to latest due to high lag.\n");
-                CircularBuffer_fastforward(input_buffer, audio_options.filter_size * 2 * audio_options.conv_multiple);
+                CircularBuffer_fastforward(input_buffer, audio_options.filter_size * 2);
                 CircularBuffer_fastforward(output_buffer, 0);
             }
             fflush(stdout);
@@ -238,7 +226,9 @@ done:
         Pa_CloseStream(input_stream);
     }
     Pa_Terminate();
-    CircularBuffer_destroy(input_buffer);
+    if (input_buffer) {
+        CircularBuffer_destroy(input_buffer);
+    }
     CircularBuffer_destroy(output_buffer);
     OSFilter_destroy(filter);
 
@@ -258,8 +248,65 @@ int is_parent_running(pthread_t parent_tid)
 }
 
 
-#ifdef AUDIO_MAIN
+CircularBuffer * __read_audio_file(AudioOptions audio_options)
+{
+    struct stat st;
+    SF_INFO sf_info;
+    long wav_file_size;
 
+    float * buffer = NULL;
+    CircularBuffer * input_buffer = NULL;
+    SNDFILE * wav_file = NULL;
+
+    if (stat(audio_options.wav_path, &st) == 0) {
+        wav_file_size = st.st_size;
+    } else {
+        printf("Could not open wav file: %s\n", audio_options.wav_path);
+        fflush(stdout);
+        goto error;
+    }
+
+    input_buffer = CircularBuffer_create(wav_file_size);
+
+    printf("Opening wave file %s with size %ld\n", audio_options.wav_path, wav_file_size);
+
+    if (!(wav_file = sf_open(audio_options.wav_path, SFM_READ, &sf_info))) {
+        printf("Could not open wav file: %s\n", audio_options.wav_path);
+        fflush(stdout);
+        goto error;
+    }
+
+    buffer =  (float *)malloc(sizeof(float) * WAV_BUFFER_SIZE);
+
+    if (!buffer) {
+        sf_close(wav_file);
+        goto error;
+    }
+
+    int readcount;
+    while ((readcount = sf_read_float(wav_file, buffer, WAV_BUFFER_SIZE))) {
+        CircularBuffer_produce_blocking(input_buffer, buffer, readcount);
+    }
+
+    free(buffer);
+    sf_close(wav_file);
+    return input_buffer;
+
+ error:
+    if (buffer) {
+        free(buffer);
+    }
+    if (input_buffer) {
+        CircularBuffer_destroy(input_buffer);
+    }
+    if (wav_file) {
+        sf_close(wav_file);
+    }
+    return NULL;
+}
+
+
+#ifdef AUDIO_MAIN
 
 int main(int argc, char ** argv)
 {

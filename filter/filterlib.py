@@ -72,11 +72,11 @@ def run_filter(options):
             len(filters),
             len(filters[0]),
             options.get('conv_multiple', 4),
-            options.get('buffer_size', 10 * (1 << 20)),
+            options.get('buffer_size', 50 * (1 << 10)),
             int(bool(options.get('print_debug'))),
             float(options.get('input_scale', 0.7071)),
             wav_file,
-            float(options.get('lag_reset_limit', 0.060)),
+            float(options.get('lag_reset_limit', 0.10)),
             thread.get_ident()
         ))
 
