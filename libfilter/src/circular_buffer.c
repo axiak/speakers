@@ -3,11 +3,13 @@
 #include <stdio.h>
 #include <fftw3.h>
 #include <string.h>
+#include <errno.h>
 
 #include "circular_buffer.h"
 
 static inline int __index(CircularBuffer * circular_buffer, long index);
 static inline int __mod(long a, long b);
+static inline void plock(pthread_mutex_t *mutex);
 
 
 CircularBuffer * CircularBuffer_create(int capacity)
@@ -130,7 +132,7 @@ void CircularBuffer_consume_blocking(CircularBuffer * buf, NUMERIC * target, int
     for (int i = 0; i < length + preamble; ++i) {
         target[i] = buf->data[__index(buf, i + offset - preamble)];
     }
-    pthread_mutex_lock(&buf->offset_mutex);
+    plock(&buf->offset_mutex);
     buf->offset_consumer += length;
     pthread_cond_signal(&buf->offset_condition);
     pthread_mutex_unlock(&buf->offset_mutex);
@@ -139,7 +141,7 @@ void CircularBuffer_consume_blocking(CircularBuffer * buf, NUMERIC * target, int
 
 long CircularBuffer_lag(CircularBuffer * buf)
 {
-    pthread_mutex_lock(&buf->offset_mutex);
+    plock(&buf->offset_mutex);
     long result = buf->offset_producer - buf->offset_consumer;
     pthread_mutex_unlock(&buf->offset_mutex);
     return result;
@@ -147,7 +149,7 @@ long CircularBuffer_lag(CircularBuffer * buf)
 
 void CircularBuffer_fastforward(CircularBuffer * buf, int distance_from_end)
 {
-    pthread_mutex_lock(&buf->offset_mutex);
+    plock(&buf->offset_mutex);
 
     buf->offset_consumer = buf->offset_producer - distance_from_end;
 
@@ -172,6 +174,23 @@ static inline int __mod(long a, long b)
         }
     }
     return a % b;
+}
+
+static inline void plock(pthread_mutex_t *mutex)
+{
+    int result;
+    while (true) {
+        result = pthread_mutex_lock(mutex);
+        if (result == 0) {
+            return;
+        } else if (result == EBUSY) {
+            continue;
+        } else {
+            fprintf(stderr, "Error locking thread: %d\n", result);
+            fflush(stderr);
+            exit(1);
+        }
+    }
 }
 
 #ifdef BUFFER_MAIN

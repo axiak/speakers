@@ -1,18 +1,21 @@
 #!/usr/bin/env python
 import numpy
+from muter import unmute
 from filters import FilterFactory
 
 
 def main():
     filter_factory = FilterFactory(sample_freq=44100, filter_size=1025)
 
-    filters = [filter_factory.allpass()] * 3
+    #filters = build_iir_filters(filter_factory)
 
-    filters = build_iir_filters(filter_factory)
+    #filters = build_remez_filters(filter_factory)
 
-    filters = build_remez_filters(filter_factory)
-
-    filters[0] = filter_factory.allpass()
+    filters = [
+        filter_factory.allpass(),
+        filter_factory.nopass(),
+        filter_factory.nopass()
+    ]
 
     try:
         for filter_ in filters:
@@ -26,10 +29,12 @@ def main():
 
     print "Running with filters: {0}".format(filters)
 
+    unmute()
+
     run_filter({
         'filters': [numpy.real(f.coefficients) for f in filters],
         'sample_rate': filter_factory.sample_freq,
-        'input_device': 9,
+        'input_device': 1, # 9 for spdif
         'output_device': 7,
         'print_debug': True,
         #'wav_file': '/home/axiak/Documents/a2002011001-e02.wav'

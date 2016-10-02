@@ -30,11 +30,13 @@ setup(
         "pyaudio",
         "matplotlib",
         "cffi",
-        "picos",
+        #"picos",
+        #"RPi",
     ],
     entry_points={
         'console_scripts': [
             'runspeakers=filter.runspeakers:main',
+            'mute=filter.muter:mute',
         ],
     },
 )

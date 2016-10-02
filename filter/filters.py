@@ -140,6 +140,15 @@ class FilterFactory(object):
         )
 
     @filter_cache
+    def nopass(self):
+        return Filter(
+            'nopass',
+            None,
+            self.sample_freq,
+            numpy.repeat(0, self.filter_size)
+        )
+
+    @filter_cache
     def remez_filter(self, inner_bands, band_coefficients, grid_density=256, name=None):
         return Filter(
             'remez',
