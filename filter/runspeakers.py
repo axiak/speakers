@@ -1,20 +1,30 @@
 #!/usr/bin/env python
+import os
 import numpy
 from muter import unmute
 from filters import FilterFactory
 
 
 def main():
-    filter_factory = FilterFactory(sample_freq=44100, filter_size=1025)
+    filter_factory = FilterFactory(sample_freq=48000, filter_size=1025)
 
     #filters = build_iir_filters(filter_factory)
 
-    #filters = build_remez_filters(filter_factory)
+    remez_filters = build_remez_filters(filter_factory)
+
+    normalize_tweeter_filter = filter_factory.invert_measurement(os.path.join(
+        os.path.dirname(__file__), '..', 'measurements', 'tweeterleft2.txt.gz'
+    ), (-0.001, 0.004), (1000, 18000))
+    normalize_mid_filter = filter_factory.invert_measurement(os.path.join(
+        os.path.dirname(__file__), '..', 'measurements', 'midrangeleft1.txt.gz'
+    ), (-0.001, 0.004), (300, 5000))
+
+    #filters = [filter_ * normalize_filter for filter_ in filters]
 
     filters = [
-        filter_factory.allpass(),
-        filter_factory.nopass(),
-        filter_factory.nopass()
+        remez_filters[0],
+        normalize_mid_filter * remez_filters[1],
+        normalize_tweeter_filter * remez_filters[2]
     ]
 
     try:

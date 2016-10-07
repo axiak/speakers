@@ -1,4 +1,5 @@
 import os
+import gzip
 import numpy
 import shelve
 import pickle
@@ -59,6 +60,7 @@ class Filter(object):
 
         pyplot.plot(t, numpy.abs(filter_coefs))
         pyplot.plot(t, numpy.real(filter_coefs))
+        pyplot.xlim(0, 0.003)
         pyplot.legend(['abs', 'real'], loc='upper right')
 
         pyplot.grid(True)
@@ -196,6 +198,89 @@ class FilterFactory(object):
             coefs
         )
 
+    def _read_ir_file(self, filename, start_window=None, stop_window=None):
+        impulse_response = {}
+        if filename.endswith('.gz'):
+            f = gzip.GzipFile(filename)
+        else:
+            f = open(filename)
+        try:
+            start_time = 0
+            sample_interval = 0
+            if start_window is None:
+                start_window = start_time
+            if stop_window is None:
+                stop_window = 1e20
+
+            for line in f:
+                if 'Sample interval' in line:
+                    sample_interval = float(line.split()[0])
+                elif 'Start time' in line:
+                    start_time = float(line.split()[0])
+                if not line.strip():
+                    break
+            now = start_time
+            for line in f:
+                if not line.strip():
+                    return impulse_response
+                if start_window <= now <= stop_window:
+                    impulse_response[now] = float(line.strip())
+                else:
+                    impulse_response[now] = 0
+                now += sample_interval
+            return impulse_response
+        finally:
+            f.close()
+
+    def _build_freq_response(self, impulse_response, start_freq, stop_freq):
+        items = sorted(impulse_response.items())
+        sample_rate = 1 / (items[1][0] - items[0][0])
+        freq_scale = numpy.linspace(0, sample_rate, len(items) + 1)
+
+        fft = scipy.fftpack.fft(numpy.array([item[1] for item in items]))
+        highest_index_below_start = max(idx for idx in range(len(freq_scale))
+                                        if freq_scale[idx] < start_freq)
+        lowest_index_above_stop = min(idx for idx in range(len(freq_scale))
+                                      if freq_scale[idx] > stop_freq)
+        fft[0:highest_index_below_start] = fft[highest_index_below_start]
+        fft[lowest_index_above_stop:-1] = fft[lowest_index_above_stop]
+        return freq_scale, fft
+
+    def _read_spl_file(self, filename):
+        db_dict = {}
+        with open(filename) as f:
+            for line in f:
+                if line.startswith('*') or not line.strip():
+                    continue
+                freq, db = [float(x) for x in line.split()[:2]]
+                # Below 39hz the measurements are of the box and
+                # cannot be corrected without overflow
+                if freq >= 60:
+                    db_dict[freq] = db
+        return {freq: 10**(db / 20.0) for freq, db in db_dict.items()}
+
+
+    #@filter_cache
+    def invert_measurement(self, filename, impulse_box, freq_box, name=None):
+        impulse_response = self._read_ir_file(filename, impulse_box[0], impulse_box[1])
+        sample_freq, new_fft = self._build_freq_response(impulse_response, freq_box[0], freq_box[1])
+        new_fft = 1. / new_fft
+        phase = -numpy.imag(scipy.signal.hilbert(numpy.log(numpy.abs(new_fft))))
+        min_phase_fft = numpy.exp(phase * 1j) * numpy.abs(new_fft) # e^( cos(x) + i sin(x)) 
+        min_phase_ifft = scipy.fftpack.ifft(min_phase_fft)
+        coefs = numpy.real(min_phase_ifft[:self.filter_size])
+        coefs /= numpy.sqrt(numpy.sum(coefs ** 2))
+        f = Filter(
+            'invert_measurement',
+            name,
+            self.sample_freq,
+            coefs
+        )
+        f.phase = phase
+        f.min_phase_fft = min_phase_fft
+        f.min_phase_ifft = min_phase_ifft
+        return f
+
     def optimization_filter(self, signal, optimization_order=None, name=None, disp=False, maxIter=100):
         if optimization_order is None:
             optimization_order = self.filter_size * 4
@@ -264,6 +349,8 @@ class FilterFactory(object):
     def __signal_from_dict(self, signal):
         if self.sample_freq / 2.0 not in signal:
             signal[self.sample_freq / 2.0] = max(signal.items())[1]
+        if 0 not in signal:
+            signal[0] = min(signal.items())[1]
         items = signal.items()
 
         return self.__symmetric_signal_function(scipy.interpolate.interp1d(
