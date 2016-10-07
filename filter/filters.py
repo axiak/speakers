@@ -260,13 +260,13 @@ class FilterFactory(object):
         return {freq: 10**(db / 20.0) for freq, db in db_dict.items()}
 
 
-    #@filter_cache
+    @filter_cache
     def invert_measurement(self, filename, impulse_box, freq_box, name=None):
         impulse_response = self._read_ir_file(filename, impulse_box[0], impulse_box[1])
         sample_freq, new_fft = self._build_freq_response(impulse_response, freq_box[0], freq_box[1])
         new_fft = 1. / new_fft
-        phase = -numpy.imag(scipy.signal.hilbert(numpy.log(numpy.abs(new_fft))))
-        min_phase_fft = numpy.exp(phase * 1j) * numpy.abs(new_fft) # e^( cos(x) + i sin(x))
+        phase = -numpy.imag(scipy.signal.hilbert(numpy.log(numpy.abs(new_fft) ** 4)))
+        min_phase_fft = numpy.exp(phase * 1j) * numpy.abs(new_fft)
         min_phase_ifft = scipy.fftpack.ifft(min_phase_fft)
         coefs = numpy.real(min_phase_ifft[:self.filter_size])
         coefs /= numpy.sqrt(numpy.sum(coefs ** 2))
