@@ -313,23 +313,27 @@ int main(int argc, char ** argv)
     (void)argc;
     (void)argv;
 
+
     AudioOptions audio_options = {
         48000,
+        0,
+        0,
         2,
-        2,
-        6,
         NULL,
+        1,
         3,
-        1025,
         4,
         1024 * 1024,
         1,
-        .5
+        0.5,
+        NULL,
+        0.10,
+        pthread_self()
     };
 
-    audio_options.filters = (NUMERIC *)malloc(sizeof(NUMERIC) * 1025 * 3);
-    for (int i = 0; i < 1025 * 3; ++i) {
-        audio_options.filters[i] = 1 / 14096.0;
+    audio_options.filters = (NUMERIC *)malloc(sizeof(NUMERIC) * audio_options.num_filters * audio_options.filter_size);
+    for (int i = 0; i < audio_options.num_filters * audio_options.filter_size; ++i) {
+        audio_options.filters[i] = 1 / ((double) audio_options.filter_size);
     }
 
     int ret_val = run_filter(audio_options);

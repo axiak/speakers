@@ -52,7 +52,7 @@ void CircularBuffer_destroy(CircularBuffer * circular_buffer)
 
 bool CircularBuffer_produce(CircularBuffer * buf, const NUMERIC * data, int length)
 {
-    pthread_mutex_lock(&buf->offset_mutex);
+    plock(&buf->offset_mutex);
     if (buf->offset_consumer + length + buf->capacity <= buf->offset_producer) {
         pthread_mutex_unlock(&buf->offset_mutex);
         return false;
@@ -70,7 +70,7 @@ bool CircularBuffer_produce(CircularBuffer * buf, const NUMERIC * data, int leng
         }
     }
 
-    pthread_mutex_lock(&buf->offset_mutex);
+    plock(&buf->offset_mutex);
     buf->offset_producer += length;
     pthread_mutex_unlock(&buf->offset_mutex);
     return true;
@@ -79,7 +79,6 @@ bool CircularBuffer_produce(CircularBuffer * buf, const NUMERIC * data, int leng
 void CircularBuffer_produce_blocking(CircularBuffer * buf, const NUMERIC * data, int length)
 {
     int start_index = __index(buf, buf->offset_producer);
-    pthread_mutex_unlock(&buf->offset_mutex);
 
     // fast lane
     if (start_index + length < buf->capacity) {
@@ -91,7 +90,7 @@ void CircularBuffer_produce_blocking(CircularBuffer * buf, const NUMERIC * data,
         }
     }
 
-    pthread_mutex_lock(&buf->offset_mutex);
+    plock(&buf->offset_mutex);
     buf->offset_producer += length;
     pthread_cond_signal(&buf->offset_condition);
     pthread_mutex_unlock(&buf->offset_mutex);
@@ -99,7 +98,7 @@ void CircularBuffer_produce_blocking(CircularBuffer * buf, const NUMERIC * data,
 
 bool CircularBuffer_consume(CircularBuffer * buf, NUMERIC * target, int length, int preamble)
 {
-    pthread_mutex_lock(&buf->offset_mutex);
+    plock(&buf->offset_mutex);
     if (buf->offset_producer < buf->offset_consumer + length) {
         pthread_mutex_unlock(&buf->offset_mutex);
         return false;
@@ -110,7 +109,7 @@ bool CircularBuffer_consume(CircularBuffer * buf, NUMERIC * target, int length, 
     for (int i = 0; i < length + preamble; ++i) {
         target[i] = buf->data[__index(buf, i + offset - preamble)];
     }
-    pthread_mutex_lock(&buf->offset_mutex);
+    plock(&buf->offset_mutex);
     buf->offset_consumer += length;
     pthread_mutex_unlock(&buf->offset_mutex);
     return true;
@@ -118,7 +117,7 @@ bool CircularBuffer_consume(CircularBuffer * buf, NUMERIC * target, int length, 
 
 void CircularBuffer_consume_blocking(CircularBuffer * buf, NUMERIC * target, int length, int preamble)
 {
-    pthread_mutex_lock(&buf->offset_mutex);
+    plock(&buf->offset_mutex);
     int check_counter = 0;
     while (buf->offset_producer < buf->offset_consumer + length) {
         pthread_cond_wait(&buf->offset_condition, &buf->offset_mutex);
