@@ -232,19 +232,35 @@ class FilterFactory(object):
         finally:
             f.close()
 
+    def _mask_freq_response(self, sample_rate, fft_coefs, start_freq, stop_freq):
+        #   When masking the frequency response, we have to keep in mind
+        #   that the frequency scale wraps around.  It starts at 0, goes up to
+        #   Fs / 2, then wraps around to -Fs / 2 and comes back up to -0.
+        #   Both the positive and negative sides of the scale need to be masked.
+        N = fft_coefs.shape[0]
+        freq_scale = numpy.linspace(0, sample_rate, N + 1)[:-1]
+        freq_scale[freq_scale > sample_rate / 2] -= sample_rate
+
+        #   Snap start/end to freq scale so no interpolation is needed.
+        #   Should be close enough if the FFT has a lot of points.
+        coef_at_start = fft_coefs[int(start_freq * N / sample_rate)]
+        coef_at_stop = fft_coefs[int(stop_freq * N / sample_rate)]
+
+        #   Mask coefficients outside the desired band at both positive and negative frequency.
+        fft_coefs[freq_scale < -stop_freq] = coef_at_stop
+        fft_coefs[(freq_scale > -start_freq) * (freq_scale < start_freq)] = coef_at_start
+        fft_coefs[freq_scale > stop_freq] = coef_at_stop
+
+        return fft_coefs
+
     def _build_freq_response(self, impulse_response, start_freq, stop_freq):
         items = sorted(impulse_response.items())
         sample_rate = 1 / (items[1][0] - items[0][0])
         freq_scale = numpy.linspace(0, sample_rate, len(items) + 1)
+        freq_scale[freq_scale > sample_rate / 2] -= sample_rate
 
         fft = scipy.fftpack.fft(numpy.array([item[1] for item in items]))
-        highest_index_below_start = max(idx for idx in range(len(freq_scale))
-                                        if freq_scale[idx] < start_freq)
-        lowest_index_above_stop = min(idx for idx in range(len(freq_scale))
-                                      if freq_scale[idx] > stop_freq)
-        fft[0:highest_index_below_start] = fft[highest_index_below_start]
-        fft[lowest_index_above_stop:-1] = fft[lowest_index_above_stop]
-        return freq_scale, fft
+        return freq_scale[:-1], self._mask_freq_response(sample_rate, fft, start_freq, stop_freq)
 
     def _read_spl_file(self, filename):
         db_dict = {}
@@ -259,24 +275,29 @@ class FilterFactory(object):
                     db_dict[freq] = db
         return {freq: 10**(db / 20.0) for freq, db in db_dict.items()}
 
-
     @filter_cache
     def invert_measurement(self, filename, impulse_box, freq_box, name=None):
         impulse_response = self._read_ir_file(filename, impulse_box[0], impulse_box[1])
         sample_freq, new_fft = self._build_freq_response(impulse_response, freq_box[0], freq_box[1])
-        new_fft = 1. / new_fft
-        phase = -numpy.imag(scipy.signal.hilbert(numpy.log(numpy.abs(new_fft) ** 4)))
-        min_phase_fft = numpy.exp(phase * 1j) * numpy.abs(new_fft)
+
+        #   Invert the measured FFT magnitude to get the filter FFT magnitude
+        filt_fft_mag = numpy.abs(new_fft) ** -1
+        #   Make the filter minimum phase using the Hilbert transform
+        filt_fft_phase = -numpy.imag(scipy.signal.hilbert(numpy.log(filt_fft_mag)))
+        #   Construct the filter impulse response from the FFT magnitude and phase
+        min_phase_fft = numpy.exp(filt_fft_phase * 1j) * filt_fft_mag
         min_phase_ifft = scipy.fftpack.ifft(min_phase_fft)
+        
         coefs = numpy.real(min_phase_ifft[:self.filter_size])
         coefs /= numpy.sqrt(numpy.sum(coefs ** 2))
+        
         f = Filter(
             'invert_measurement',
             name,
             self.sample_freq,
             coefs
         )
-        f.phase = phase
+        f.phase = filt_fft_phase
         f.min_phase_fft = min_phase_fft
         f.min_phase_ifft = min_phase_ifft
         return f
