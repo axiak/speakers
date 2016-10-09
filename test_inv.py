@@ -93,6 +93,6 @@ pyplot.ylim([-10, 5])
 pyplot.grid(True)
 pyplot.title('Frequency responses')
 #pyplot.savefig('test_inv_fr.pdf')
-pyplot.savefig('test_inv_multiplot.pdf')
+pyplot.savefig('test_inv2_multiplot.pdf')
 
 pyplot.show()
