@@ -1,6 +1,17 @@
+import zlib
 import numpy
 
-__all__ = ('tukey',)
+__all__ = ('tukey', 'crc',)
+
+
+def crc(file_name):
+    prev = 0
+    file_name = file_name.replace('.pyc', '.py')
+    print "Computing crc for " + file_name
+    with open(file_name, 'rb') as f:
+        for line in f:
+            prev = zlib.crc32(line, prev)
+    return "%X" % (prev & 0xFFFFFFFF)
 
 
 def tukey(M, alpha=0.5, sym=True):
@@ -11,7 +22,7 @@ def tukey(M, alpha=0.5, sym=True):
     if alpha <= 0:
         return np.ones(M, 'd')
     elif alpha >= 1.0:
-        return hann(M, sym=sym)
+        raise Exception("hann not implemented.")
 
     M, needs_trunc = _extend(M, sym)
 

@@ -1,15 +1,16 @@
 import os
+import zlib
 import gzip
 import numpy
 import shelve
 import pickle
+import binascii
+import inspect
 import scipy.fftpack
 import scipy.signal
 from functools import wraps
-from matplotlib import pyplot
 
-from .utils import tukey
-
+from .utils import tukey, crc
 
 
 class Filter(object):
@@ -55,6 +56,8 @@ class Filter(object):
             ))
 
     def plot(self, output_file=None, prompt=True):
+        from matplotlib import pyplot
+
         filter_coefs = self.coefficients
         t = numpy.linspace(0, float(len(filter_coefs - 1)) / self.sample_freq, len(filter_coefs))
         fig = pyplot.figure(figsize=(10, 10))
@@ -108,6 +111,8 @@ class Filter(object):
 
 __filter_db = shelve.open(os.path.join(os.path.dirname(__file__), 'filter_cache'))
 
+__cache_key = crc(__file__)
+
 
 def filter_cache(method):
     @wraps(method)
@@ -117,7 +122,13 @@ def filter_cache(method):
             return method(*args, **kwargs)
         self, args = args[0], args[1:]
         factory_args = sorted(self.__dict__.items())
-        key = pickle.dumps((method_name, factory_args, args, sorted(kwargs.items())))
+        key = pickle.dumps((
+            __cache_key,
+            method_name,
+            factory_args,
+            args,
+            sorted(kwargs.items())
+        ))
         cached_value = __filter_db.get(key)
         if cached_value is None:
             cached_value = method(self, *args, **kwargs)
@@ -138,7 +149,7 @@ class FilterFactory(object):
     def hilbert_fft_coefs_from_mag(self, fft_mag):
         fft_phase = -numpy.imag(scipy.signal.hilbert(numpy.log(fft_mag)))
         return numpy.exp(fft_phase * 1j) * fft_mag
-    
+
     @property
     def freq_scale(self):
         freq_scale = numpy.linspace(0, self.sample_freq, self.filter_size + 1)[:-1]
@@ -214,42 +225,42 @@ class FilterFactory(object):
         fft_coefs = (1 + c1 * s) / (1 + c2 * s)
         coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
         return Filter('shelf', name, self.sample_freq, coefs)
-    
+
     @filter_cache
     def analog_lp1(self, center_freq, name=None):
         s_norm = 1j * self.freq_scale / center_freq
         fft_coefs = 1. / (1 + s_norm)
         coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
         return Filter('lp1', name, self.sample_freq, coefs)
-    
+
     @filter_cache
     def analog_lp2(self, center_freq, Q, name=None):
         s_norm = 1j * self.freq_scale / center_freq
         fft_coefs = 1. / (1 + s_norm / Q + s_norm ** 2)
         coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
         return Filter('lp2', name, self.sample_freq, coefs)
-        
+
     @filter_cache
     def analog_hp1(self, center_freq, name=None):
         s_norm = 1j * self.freq_scale / center_freq
         fft_coefs = s_norm / (1 + s_norm)
         coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
         return Filter('hp1', name, self.sample_freq, coefs)
-        
+
     @filter_cache
     def analog_hp2(self, center_freq, Q, name=None):
         s_norm = 1j * self.freq_scale / center_freq
         fft_coefs = (s_norm ** 2) / (1 + s_norm / Q + s_norm ** 2)
         coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
         return Filter('hp2', name, self.sample_freq, coefs)
-    
+
     @filter_cache
     def delay_sec(self, time, name=None):
         s = 1j * 2 * numpy.pi * self.freq_scale
         fft_coefs = numpy.exp(-s * time)
         coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
         return Filter('delay', name, self.sample_freq, coefs)
-    
+
     @filter_cache
     def delay_deg(self, freq_hz, phase_deg, name=None):
         return self.delay_sec(phase_deg / 360. / freq_hz)
@@ -283,7 +294,6 @@ class FilterFactory(object):
     @filter_cache
     def hilbert_filter(self, signal, name=None):
         coefs = scipy.signal.hilbert(signal)
-        #coefs /= coefs.sum()
         coefs = scipy.fftpack.ifft(numpy.imag(coefs))
         return Filter(
             'hilbert',
