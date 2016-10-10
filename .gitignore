@@ -8,3 +8,4 @@ a.out
 *.s
 target/
 filter_cache
+filter_cache.db

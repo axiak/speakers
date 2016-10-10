@@ -8,6 +8,9 @@ import scipy.signal
 from functools import wraps
 from matplotlib import pyplot
 
+from .utils import tukey
+
+
 
 class Filter(object):
     sample_freq = None
@@ -378,10 +381,12 @@ class FilterFactory(object):
         #   Construct the filter impulse response from the FFT magnitude and phase
         min_phase_fft = numpy.exp(filt_fft_phase * 1j) * filt_fft_mag
         min_phase_ifft = scipy.fftpack.ifft(min_phase_fft)
-        
-        coefs = numpy.real(min_phase_ifft[:self.filter_size])
+
+        window = tukey(self.filter_size * 2, alpha=0.20)[-self.filter_size:]
+        coefs = numpy.real(min_phase_ifft[:self.filter_size] * window)
+
         coefs /= numpy.sqrt(numpy.sum(coefs ** 2))
-        
+
         f = Filter(
             'invert_measurement',
             name,
