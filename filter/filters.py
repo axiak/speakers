@@ -132,6 +132,16 @@ class FilterFactory(object):
         self.sample_freq = sample_freq
         self.filter_size = filter_size
 
+    def hilbert_fft_coefs_from_mag(self, fft_mag):
+        fft_phase = -numpy.imag(scipy.signal.hilbert(numpy.log(fft_mag)))
+        return numpy.exp(fft_phase * 1j) * fft_mag
+    
+    @property
+    def freq_scale(self):
+        freq_scale = numpy.linspace(0, self.sample_freq, self.filter_size + 1)[:-1]
+        freq_scale[freq_scale > self.sample_freq / 2] -= self.sample_freq
+        return freq_scale
+
     @filter_cache
     def allpass(self):
         return Filter(
@@ -185,6 +195,87 @@ class FilterFactory(object):
             self.sample_freq,
             coefs
         )
+
+    @filter_cache
+    def gain(self, gain_db, name=None):
+        coefs = numpy.zeros((self.filter_size,))
+        coefs[0] = 10. ** (gain_db / 20.)
+        return Filter('gain', name, self.sample_freq, coefs)
+
+    @filter_cache
+    def shelf(self, center_freq, hf_gain_db, name=None):
+        c = 1. / (2 * numpy.pi * center_freq)
+        c1 = c * (10 ** (hf_gain_db / 2 / 20))
+        c2 = c * (10 ** (-hf_gain_db / 2 / 20))
+        s = 1j * 2 * numpy.pi * self.freq_scale
+        fft_coefs = (1 + c1 * s) / (1 + c2 * s)
+        coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
+        return Filter('shelf', name, self.sample_freq, coefs)
+    
+    @filter_cache
+    def analog_lp1(self, center_freq, name=None):
+        s_norm = 1j * self.freq_scale / center_freq
+        fft_coefs = 1. / (1 + s_norm)
+        coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
+        return Filter('lp1', name, self.sample_freq, coefs)
+    
+    @filter_cache
+    def analog_lp2(self, center_freq, Q, name=None):
+        s_norm = 1j * self.freq_scale / center_freq
+        fft_coefs = 1. / (1 + s_norm / Q + s_norm ** 2)
+        coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
+        return Filter('lp2', name, self.sample_freq, coefs)
+        
+    @filter_cache
+    def analog_hp1(self, center_freq, name=None):
+        s_norm = 1j * self.freq_scale / center_freq
+        fft_coefs = s_norm / (1 + s_norm)
+        coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
+        return Filter('hp1', name, self.sample_freq, coefs)
+        
+    @filter_cache
+    def analog_hp2(self, center_freq, Q, name=None):
+        s_norm = 1j * self.freq_scale / center_freq
+        fft_coefs = (s_norm ** 2) / (1 + s_norm / Q + s_norm ** 2)
+        coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
+        return Filter('hp2', name, self.sample_freq, coefs)
+    
+    @filter_cache
+    def delay_sec(self, time, name=None):
+        s = 1j * 2 * numpy.pi * self.freq_scale
+        fft_coefs = numpy.exp(-s * time)
+        coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
+        return Filter('delay', name, self.sample_freq, coefs)
+    
+    @filter_cache
+    def delay_deg(self, freq_hz, phase_deg, name=None):
+        return self.delay_sec(phase_deg / 360. / freq_hz)
+
+    @filter_cache
+    def spectral_slope(self, start_freq, stop_freq, slope_db_dec, name=None):
+        assert start_freq > 0
+        assert stop_freq > start_freq
+        fa = numpy.abs(self.freq_scale)
+        width_dec = numpy.log10(stop_freq / start_freq)
+        lf_gain_db = -0.5 * width_dec * slope_db_dec
+        hf_gain_db = 0.5 * width_dec * slope_db_dec
+        filt_fft_mag = numpy.zeros(self.filter_size)
+        filt_fft_mag[fa <= start_freq] = 10. ** (lf_gain_db / 20.)
+        filt_fft_mag[fa >= stop_freq] = 10. ** (hf_gain_db / 20.)
+        active_mask = (fa > start_freq) * (fa < stop_freq)
+        filt_fft_mag[active_mask] = 10. ** ((lf_gain_db + slope_db_dec * numpy.log10(fa[active_mask] / start_freq)) / 20.)
+        fft_coefs = self.hilbert_fft_coefs_from_mag(filt_fft_mag)
+        coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
+        return Filter('slope', name, self.sample_freq, coefs)
+
+    @filter_cache
+    def parametric_eq(self, center_freq, Q, gain_db, name=None):
+        s = 1j * self.freq_scale / center_freq
+        B = 1. / Q
+        g = 10. ** (gain_db / 20.)
+        H = (s ** 2 + g * B * s + 1) / (s ** 2 + B * s + 1)
+        coefs = numpy.real(scipy.fftpack.ifft(H))
+        return Filter('parametric', name, self.sample_freq, coefs)
 
     @filter_cache
     def hilbert_filter(self, signal, name=None):
