@@ -6,11 +6,19 @@ from filters import FilterFactory
 
 
 def main():
-    filter_factory = FilterFactory(sample_freq=48000, filter_size=1025)
+    ff = filter_factory = FilterFactory(sample_freq=48000, filter_size=1025)
+
+
+    band_filters = [
+        ff.analog_lp2(450, 1),
+        (ff.analog_hp2(20, 1) * ff.analog_lp2(3300, 1)),
+        ff.analog_hp2(2200, 1)
+    ]
 
     #remez_filters = build_iir_filters(filter_factory)
+    baffle_step =  filter_factory.spectral_slope(10, 1000, -4.0)
 
-    remez_filters = build_remez_filters(filter_factory)
+    #remez_filters = build_remez_filters(filter_factory)
 
     normalize_tweeter_filter = filter_factory.invert_measurement(os.path.join(
         os.path.dirname(__file__), '..', 'measurements', 'tweeterleft4.txt.gz'
@@ -27,30 +35,11 @@ def main():
         os.path.dirname(__file__), '..', 'measurements', 'upperhalf1.txt.gz'
     ), (-0.001, 0.004), (350, 18000))
 
-    #filters = [filter_ * normalize_filter for filter_ in filters]
 
     filters = [
-        #normalize_base_filter * remez_filters[0],
-        #remez_filters[0],
-        ##normalize_mid_filter * remez_filters[1],
-        #remez_filters[1], #normalize_tweeter_filter * remez_filters[2]
-        #remez_filters[2]
-        remez_filters[0],
-        (normalize_mid_filter) * remez_filters[1],
-        (normalize_tweeter_filter) * remez_filters[2],
-        #filter_factory.allpass(),
-        #filter_factory.nopass(),
-        #normalize_tweeter_filter,
-        #filter_factory.allpass(),
-        #normalize_mid_filter,
-
-        #filter_factory.nopass(),
-        #filter_factory.nopass(),
-
-        #normalize_tweeter_filter,
-        #remez_filters[0],
-        #normalize_mid_filter * remez_filters[1],
-        #normalize_tweeter_filter * remez_filters[2]
+        baffle_step * band_filters[0],
+        baffle_step * band_filters[1] * normalize_mid_filter,
+        baffle_step * band_filters[2] * normalize_tweeter_filter
     ]
 
     try:

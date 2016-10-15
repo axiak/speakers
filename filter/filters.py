@@ -36,8 +36,10 @@ class Filter(object):
 
     def __mul__(self, other):
         self.__assert_compatible(other)
-        coefs = scipy.signal.convolve(self.coefficients, other.coefficients, mode='same')
-
+        coefs = scipy.signal.convolve(self.coefficients, other.coefficients, mode='full')
+        filt_fft_mag = numpy.abs(scipy.fftpack.fft(coefs))
+        fft_coefs = hilbert_fft_coefs_from_mag(filt_fft_mag)
+        coefs = truncate(numpy.real(scipy.fftpack.ifft(fft_coefs)), len(self.coefficients))
         return Filter(
             "{0}_conv_{1}".format(*tuple(sorted([self.filter_type, other.filter_type]))),
             "{0} * {1}".format(self.name, other.name),
@@ -145,10 +147,6 @@ class FilterFactory(object):
     def __init__(self, sample_freq, filter_size):
         self.sample_freq = sample_freq
         self.filter_size = filter_size
-
-    def hilbert_fft_coefs_from_mag(self, fft_mag):
-        fft_phase = -numpy.imag(scipy.signal.hilbert(numpy.log(fft_mag)))
-        return numpy.exp(fft_phase * 1j) * fft_mag
 
     @property
     def freq_scale(self):
@@ -278,7 +276,7 @@ class FilterFactory(object):
         filt_fft_mag[fa >= stop_freq] = 10. ** (hf_gain_db / 20.)
         active_mask = (fa > start_freq) * (fa < stop_freq)
         filt_fft_mag[active_mask] = 10. ** ((lf_gain_db + slope_db_dec * numpy.log10(fa[active_mask] / start_freq)) / 20.)
-        fft_coefs = self.hilbert_fft_coefs_from_mag(filt_fft_mag)
+        fft_coefs = hilbert_fft_coefs_from_mag(filt_fft_mag)
         coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
         return Filter('slope', name, self.sample_freq, coefs)
 
@@ -503,3 +501,11 @@ class FilterFactory(object):
 
     def close(self):
         __filter_db.sync()
+
+def hilbert_fft_coefs_from_mag(fft_mag):
+    fft_phase = -numpy.imag(scipy.signal.hilbert(numpy.log(fft_mag)))
+    return numpy.exp(fft_phase * 1j) * fft_mag
+
+def truncate(coefs, filter_size):
+    window = tukey(filter_size * 2, alpha=0.20)[-filter_size:]
+    return numpy.real(coefs[:filter_size] * window)
