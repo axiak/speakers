@@ -71,11 +71,8 @@ class Filter(object):
         fig = pyplot.figure(figsize=(10, 10))
 
         pyplot.subplot(211)
-
-        pyplot.plot(t, numpy.abs(filter_coefs))
         pyplot.plot(t, numpy.real(filter_coefs))
         pyplot.xlim(0, 0.003)
-        pyplot.legend(['abs', 'real'], loc='upper right')
 
         pyplot.grid(True)
         pyplot.xlabel('Time (s)')
