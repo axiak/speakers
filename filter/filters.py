@@ -309,6 +309,22 @@ class FilterFactory(object):
             coefs
         )
 
+    @filter_cache
+    def apply_freq_limits(self, filter, start_freq, end_freq, name=None):
+        fft_coefs = scipy.fftpack.fft(filter.coefficients)
+        N = len(filter.coefficients)
+        
+        coef_at_start = fft_coefs[int(start_freq * N / self.sample_freq)]
+        coef_at_stop = fft_coefs[int(end_freq * N / self.sample_freq)]
+        fft_coefs[self.freq_scale < -end_freq] = numpy.conj(coef_at_stop)
+        fft_coefs[(self.freq_scale > -start_freq) * (self.freq_scale < 0)] = numpy.conj(coef_at_start)
+        fft_coefs[(self.freq_scale >= 0) * (self.freq_scale < start_freq)] = coef_at_start
+        fft_coefs[self.freq_scale > end_freq] = coef_at_stop
+        
+        fft_coefs = hilbert_fft_coefs_from_mag(numpy.abs(fft_coefs))
+        coefs = truncate(numpy.real(scipy.fftpack.ifft(fft_coefs)), self.filter_size)
+        return Filter('box', name, self.sample_freq, coefs)
+
     def _read_ir_file(self, filename, start_window=None, stop_window=None):
         filename = resolve_file(filename)
         impulse_response = {}
@@ -359,8 +375,9 @@ class FilterFactory(object):
         coef_at_stop = fft_coefs[int(stop_freq * N / sample_rate)]
 
         #   Mask coefficients outside the desired band at both positive and negative frequency.
-        fft_coefs[freq_scale < -stop_freq] = coef_at_stop
-        fft_coefs[(freq_scale > -start_freq) * (freq_scale < start_freq)] = coef_at_start
+        fft_coefs[freq_scale < -stop_freq] = numpy.conj(coef_at_stop)
+        fft_coefs[(freq_scale > -start_freq) * (freq_scale < 0)] = numpy.conj(coef_at_start)
+        fft_coefs[(freq_scale >= 0) * (freq_scale < start_freq)] = coef_at_start
         fft_coefs[freq_scale > stop_freq] = coef_at_stop
 
         return fft_coefs
