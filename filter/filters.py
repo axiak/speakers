@@ -229,8 +229,8 @@ class FilterFactory(object):
     @filter_cache
     def shelf(self, center_freq, hf_gain_db, name=None):
         c = 1. / (2 * numpy.pi * center_freq)
-        c1 = c * (10 ** (hf_gain_db / 2 / 20))
-        c2 = c * (10 ** (-hf_gain_db / 2 / 20))
+        c1 = c * (10 ** (hf_gain_db / 2.0 / 20))
+        c2 = c * (10 ** (-hf_gain_db / 2.0 / 20))
         s = 1j * 2 * numpy.pi * self.freq_scale
         fft_coefs = (1 + c1 * s) / (1 + c2 * s)
         coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
