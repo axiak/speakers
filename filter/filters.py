@@ -71,11 +71,8 @@ class Filter(object):
         fig = pyplot.figure(figsize=(10, 10))
 
         pyplot.subplot(211)
-
-        pyplot.plot(t, numpy.abs(filter_coefs))
         pyplot.plot(t, numpy.real(filter_coefs))
         pyplot.xlim(0, 0.003)
-        pyplot.legend(['abs', 'real'], loc='upper right')
 
         pyplot.grid(True)
         pyplot.xlabel('Time (s)')
@@ -229,8 +226,8 @@ class FilterFactory(object):
     @filter_cache
     def shelf(self, center_freq, hf_gain_db, name=None):
         c = 1. / (2 * numpy.pi * center_freq)
-        c1 = c * (10 ** (hf_gain_db / 2 / 20))
-        c2 = c * (10 ** (-hf_gain_db / 2 / 20))
+        c1 = c * (10 ** (hf_gain_db / 2.0 / 20))
+        c2 = c * (10 ** (-hf_gain_db / 2.0 / 20))
         s = 1j * 2 * numpy.pi * self.freq_scale
         fft_coefs = (1 + c1 * s) / (1 + c2 * s)
         coefs = numpy.real(scipy.fftpack.ifft(fft_coefs))
@@ -312,6 +309,22 @@ class FilterFactory(object):
             coefs
         )
 
+    @filter_cache
+    def apply_freq_limits(self, filter, start_freq, end_freq, name=None):
+        fft_coefs = scipy.fftpack.fft(filter.coefficients)
+        N = len(filter.coefficients)
+        
+        coef_at_start = fft_coefs[int(start_freq * N / self.sample_freq)]
+        coef_at_stop = fft_coefs[int(end_freq * N / self.sample_freq)]
+        fft_coefs[self.freq_scale < -end_freq] = numpy.conj(coef_at_stop)
+        fft_coefs[(self.freq_scale > -start_freq) * (self.freq_scale < 0)] = numpy.conj(coef_at_start)
+        fft_coefs[(self.freq_scale >= 0) * (self.freq_scale < start_freq)] = coef_at_start
+        fft_coefs[self.freq_scale > end_freq] = coef_at_stop
+        
+        fft_coefs = hilbert_fft_coefs_from_mag(numpy.abs(fft_coefs))
+        coefs = truncate(numpy.real(scipy.fftpack.ifft(fft_coefs)), self.filter_size)
+        return Filter('box', name, self.sample_freq, coefs)
+
     def _read_ir_file(self, filename, start_window=None, stop_window=None):
         filename = resolve_file(filename)
         impulse_response = {}
@@ -362,8 +375,9 @@ class FilterFactory(object):
         coef_at_stop = fft_coefs[int(stop_freq * N / sample_rate)]
 
         #   Mask coefficients outside the desired band at both positive and negative frequency.
-        fft_coefs[freq_scale < -stop_freq] = coef_at_stop
-        fft_coefs[(freq_scale > -start_freq) * (freq_scale < start_freq)] = coef_at_start
+        fft_coefs[freq_scale < -stop_freq] = numpy.conj(coef_at_stop)
+        fft_coefs[(freq_scale > -start_freq) * (freq_scale < 0)] = numpy.conj(coef_at_start)
+        fft_coefs[(freq_scale >= 0) * (freq_scale < start_freq)] = coef_at_start
         fft_coefs[freq_scale > stop_freq] = coef_at_stop
 
         return fft_coefs
