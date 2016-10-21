@@ -1,4 +1,5 @@
 import os
+import os
 import zlib
 import gzip
 import numpy
@@ -37,15 +38,20 @@ class Filter(object):
     def __mul__(self, other):
         self.__assert_compatible(other)
         coefs = scipy.signal.convolve(self.coefficients, other.coefficients, mode='full')
-        filt_fft_mag = numpy.abs(scipy.fftpack.fft(coefs))
-        fft_coefs = hilbert_fft_coefs_from_mag(filt_fft_mag)
-        coefs = truncate(numpy.real(scipy.fftpack.ifft(fft_coefs)), len(self.coefficients))
+        coefs = truncate(coefs, len(self.coefficients))
         return Filter(
             "{0}_conv_{1}".format(*tuple(sorted([self.filter_type, other.filter_type]))),
             "{0} * {1}".format(self.name, other.name),
             self.sample_freq,
             coefs
         )
+
+    def __pow__(self, exp):
+        f = self
+        assert int(exp) == exp, "Invalid exp: " + exp
+        for i in range(exp - 1):
+            f *= self
+        return f
 
     def __assert_compatible(self, other):
         if self.sample_freq != other.sample_freq:
@@ -209,6 +215,12 @@ class FilterFactory(object):
         )
 
     @filter_cache
+    def invert(self, name=None):
+        coefs = numpy.zeros((self.filter_size,))
+        coefs[0] = -1
+        return Filter('invert', name, self.sample_freq, coefs)
+
+    @filter_cache
     def gain(self, gain_db, name=None):
         coefs = numpy.zeros((self.filter_size,))
         coefs[0] = 10. ** (gain_db / 20.)
@@ -301,6 +313,7 @@ class FilterFactory(object):
         )
 
     def _read_ir_file(self, filename, start_window=None, stop_window=None):
+        filename = resolve_file(filename)
         impulse_response = {}
         if filename.endswith('.gz'):
             f = gzip.GzipFile(filename)
@@ -378,6 +391,22 @@ class FilterFactory(object):
         return {freq: 10**(db / 20.0) for freq, db in db_dict.items()}
 
     @filter_cache
+    def measurement(self, filename, impulse_box, lookback=48, name=None):  # todo, dynamic lookback?
+        impulse_response = self._read_ir_file(filename, impulse_box[0], impulse_box[1])
+        impulse_response = [item[1] for item in sorted(impulse_response.items())]
+
+        idx = numpy.argmax(numpy.abs(impulse_response))
+
+        coefs = truncate(impulse_response[idx - 48:], self.filter_size)
+
+        return Filter(
+            'measurement',
+            name,
+            self.sample_freq,
+            coefs
+        )
+
+    @filter_cache
     def invert_measurement(self, filename, impulse_box, freq_box, name=None):
         impulse_response = self._read_ir_file(filename, impulse_box[0], impulse_box[1])
         sample_freq, new_fft = self._build_freq_response(impulse_response, freq_box[0], freq_box[1])
@@ -390,8 +419,7 @@ class FilterFactory(object):
         min_phase_fft = numpy.exp(filt_fft_phase * 1j) * filt_fft_mag
         min_phase_ifft = scipy.fftpack.ifft(min_phase_fft)
 
-        window = tukey(self.filter_size * 2, alpha=0.20)[-self.filter_size:]
-        coefs = numpy.real(min_phase_ifft[:self.filter_size] * window)
+        coefs = truncate(numpy.real(min_phase_ifft), self.filter_size)
 
         coefs /= numpy.sqrt(numpy.sum(coefs ** 2))
 
@@ -509,3 +537,9 @@ def hilbert_fft_coefs_from_mag(fft_mag):
 def truncate(coefs, filter_size):
     window = tukey(filter_size * 2, alpha=0.20)[-filter_size:]
     return numpy.real(coefs[:filter_size] * window)
+
+def resolve_file(filename):
+    if os.path.exists(filename):
+        return filename
+    else:
+        return os.path.join(os.path.dirname(__file__), '..', 'measurements', os.path.basename(filename))

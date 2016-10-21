@@ -8,39 +8,25 @@ from filters import FilterFactory
 def main():
     ff = filter_factory = FilterFactory(sample_freq=48000, filter_size=1025)
 
+    baffle_step = ff.shelf(350, -4.5)
 
-    band_filters = [
-        ff.analog_lp2(450, 1),
-        (ff.analog_hp2(20, 1) * ff.analog_lp2(3300, 1)),
-        ff.analog_hp2(2200, 1)
+    tw_comp = ff.invert_measurement('./measurements/tweeterright.txt.gz', (-1e-3, 4e-3), (1.2e3, 1.8e4))
+    mid_comp = ff.invert_measurement('./measurements/midright.txt.gz', (-1e-3, 4e-3), (400, 1e4))
+    wf_comp = ff.invert_measurement('./measurements/bassright.txt.gz', (-1e-3, 3.1e-3), (400, 3e3))
+
+    RT2 = 0.707
+
+    mid_hp = ff.analog_hp2(550, RT2) ** 2
+    mid_lp = ff.analog_lp2(4500, RT2) ** 2
+    mid_bp = mid_hp * mid_lp
+
+    crossover = [
+        wf_comp * (ff.analog_lp2(450, RT2) ** 2) * baffle_step,
+        mid_comp * mid_bp * baffle_step * ff.gain(4),
+        tw_comp * (ff.analog_hp2(2700, RT2) ** 2) * ff.gain(-2.5) * ff.invert()
     ]
 
-    #remez_filters = build_iir_filters(filter_factory)
-    baffle_step =  filter_factory.spectral_slope(10, 1000, -4.0)
-
-    #remez_filters = build_remez_filters(filter_factory)
-
-    normalize_tweeter_filter = filter_factory.invert_measurement(os.path.join(
-        os.path.dirname(__file__), '..', 'measurements', 'tweeterleft4.txt.gz'
-    ), (-0.001, 0.004), (1000, 18000))
-    normalize_mid_filter = filter_factory.invert_measurement(os.path.join(
-        os.path.dirname(__file__), '..', 'measurements', 'midrangeleft3.txt.gz'
-    ), (-0.001, 0.004), (300, 5000))
-
-    normalize_base_filter = filter_factory.invert_measurement(os.path.join(
-        os.path.dirname(__file__), '..', 'measurements', 'baseleft1.txt.gz'
-    ), (-0.001, 0.004), (210, 400))
-
-    top_two_drivers = filter_factory.invert_measurement(os.path.join(
-        os.path.dirname(__file__), '..', 'measurements', 'upperhalf1.txt.gz'
-    ), (-0.001, 0.004), (350, 18000))
-
-
-    filters = [
-        baffle_step * band_filters[0],
-        baffle_step * band_filters[1] * normalize_mid_filter,
-        baffle_step * band_filters[2] * normalize_tweeter_filter
-    ]
+    filters = crossover
 
     try:
         for filter_ in filters:
@@ -61,6 +47,7 @@ def main():
         'sample_rate': filter_factory.sample_freq,
         'input_device': 1, # 9 for spdif
         'output_device': 7,
+        'input_scale': 0.4,
         'print_debug': True,
         #'wav_file': '/home/axiak/Documents/a2002011001-e02.wav'
     })
