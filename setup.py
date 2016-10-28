@@ -30,6 +30,7 @@ setup(
         "pyaudio",
         "matplotlib",
         "cffi",
+        "wrapt",
         #"picos",
         #"RPi",
     ],

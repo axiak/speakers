@@ -9,7 +9,7 @@ import binascii
 import inspect
 import scipy.fftpack
 import scipy.signal
-from functools import wraps
+import wrapt
 
 from .utils import tukey, crc
 
@@ -102,6 +102,12 @@ class Filter(object):
                 print 'Please close figure window to continue'
             pyplot.show()
 
+    def label(self):
+        if self.name:
+            return '{0}: {1}'.format(self.filter_type, self.name)
+        else:
+            return self.filter_type
+
     def __repr__(self):
         return '<{0} filter for {1}hz sample freq with {2} taps{3}>'.format(
             self.filter_type,
@@ -119,28 +125,28 @@ __filter_db = shelve.open(os.path.join(os.path.dirname(__file__), 'filter_cache'
 __cache_key = crc(__file__)
 
 
-def filter_cache(method):
-    @wraps(method)
-    def wrapper(*args, **kwargs):
-        method_name = method.__name__
-        if kwargs.pop('nocache', False):
-            return method(*args, **kwargs)
-        self, args = args[0], args[1:]
-        factory_args = sorted(self.__dict__.items())
-        key = pickle.dumps((
-            __cache_key,
-            method_name,
-            factory_args,
-            args,
-            sorted(kwargs.items())
-        ))
+@wrapt.decorator
+def filter_cache(wrapped, instance, args, kwargs):
+    method_name = wrapped.__name__
+    if kwargs.pop('nocache', False):
+        return wrapped(*args, **kwargs)
+    factory_args = sorted(instance.__dict__.items())
+    key = pickle.dumps((
+        __cache_key,
+        method_name,
+        factory_args,
+        args,
+        sorted(kwargs.items())
+    ))
+    try:
         cached_value = __filter_db.get(key)
-        if cached_value is None:
-            cached_value = method(self, *args, **kwargs)
-            __filter_db[key] = cached_value
-            __filter_db.sync()
-        return cached_value
-    return wrapper
+    except:
+        cached_value = None
+    if cached_value is None:
+        cached_value = wrapped(*args, **kwargs)
+        __filter_db[key] = cached_value
+        __filter_db.sync()
+    return cached_value
 
 
 class FilterFactory(object):
@@ -421,9 +427,40 @@ class FilterFactory(object):
         )
 
     @filter_cache
+    def invert_filter(self, filt, freq_box, name=None):
+        return self._invert_impulse_response(filt.coefficients, freq_box[0], freq_box[1], name=name)
+
+    @filter_cache
+    def min_phase(self, filt, name=None):
+        #   Invert the measured FFT magnitude to get the filter FFT magnitude
+        filt_fft_mag = numpy.abs(scipy.fftpack.fft(filt.coefficients))
+
+        #   Make the filter minimum phase using the Hilbert transform
+        filt_fft_phase = -numpy.imag(scipy.signal.hilbert(numpy.log(filt_fft_mag)))
+        #   Construct the filter impulse response from the FFT magnitude and phase
+        min_phase_fft = numpy.exp(filt_fft_phase * 1j) * filt_fft_mag
+        min_phase_ifft = scipy.fftpack.ifft(min_phase_fft)
+
+        coefs = truncate(numpy.real(min_phase_ifft), self.filter_size)
+
+        coefs /= numpy.sqrt(numpy.sum(coefs ** 2))
+
+        f = Filter(
+            'min_phase({})'.format(filt.filter_type),
+            name,
+            self.sample_freq,
+            coefs
+        )
+        return f
+
+
+    @filter_cache
     def invert_measurement(self, filename, impulse_box, freq_box, name=None):
         impulse_response = self._read_ir_file(filename, impulse_box[0], impulse_box[1])
-        sample_freq, new_fft = self._build_freq_response(impulse_response, freq_box[0], freq_box[1])
+        return self._invert_impulse_response(impulse_response, freq_box[0], freq_box[1], name=name)
+
+    def _invert_impulse_response(self, impulse_response, low_freq, high_freq, name=None):
+        sample_freq, new_fft = self._build_freq_response(impulse_response, low_freq, high_freq)
 
         #   Invert the measured FFT magnitude to get the filter FFT magnitude
         filt_fft_mag = numpy.abs(new_fft) ** -1

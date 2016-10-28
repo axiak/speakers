@@ -8,22 +8,32 @@ from filters import FilterFactory
 def main():
     ff = filter_factory = FilterFactory(sample_freq=48000, filter_size=1025)
 
-    baffle_step = ff.shelf(350, -4.5)
-
-    tw_comp = ff.invert_measurement('./measurements/tweeterright.txt.gz', (-1e-3, 4e-3), (1.2e3, 1.8e4))
-    mid_comp = ff.invert_measurement('./measurements/midright.txt.gz', (-1e-3, 4e-3), (400, 1e4))
-    wf_comp = ff.invert_measurement('./measurements/bassright.txt.gz', (-1e-3, 3.1e-3), (400, 3e3))
+    #   EQ will compensate for baffle effects
+    #   Use the shelving filter for baffle step compensation only outside the EQ band
+    meas_lf_cutoff = 300
+    baffle_step = ff.apply_freq_limits(ff.shelf(450, -10), 0, meas_lf_cutoff)
+    tw_comp = ff.invert_measurement('../measurements/tweeterleft.txt.gz', (-1e-3, 4e-3), (1.2e3, 1.8e4))
+    mid_comp = ff.invert_measurement('../measurements/midleft.txt.gz', (-1e-3, 4e-3), (meas_lf_cutoff, 1.4e4))
+    wf_comp = ff.invert_measurement('../measurements/bassleft.txt.gz', (-1e-3, 3.1e-3), (meas_lf_cutoff, 3e3))
 
     RT2 = 0.707
 
-    mid_hp = ff.analog_hp2(550, RT2) ** 2
-    mid_lp = ff.analog_lp2(4500, RT2) ** 2
+    mid_hp = ff.analog_hp2(600, RT2) ** 2
+    mid_lp = ff.analog_lp2(3000, RT2) ** 2
     mid_bp = mid_hp * mid_lp
 
+    tw_eq = ff.parametric_eq(1.9e4, 2, -2)
+    mid_eq = ff.parametric_eq(300, 0.707, 1)
+    wf_eq = ff.parametric_eq(65, 1, 5)
+
+    tw_comp *= tw_eq
+    mid_comp *= mid_eq
+    wf_comp *= wf_eq
+
     crossover = [
-        wf_comp * (ff.analog_lp2(450, RT2) ** 2) * baffle_step,
-        mid_comp * mid_bp * baffle_step * ff.gain(4),
-        tw_comp * (ff.analog_hp2(2700, RT2) ** 2) * ff.gain(-2.5) * ff.invert()
+        wf_comp * (ff.analog_lp2(600, RT2) ** 2) * baffle_step,
+        mid_comp * mid_bp * baffle_step * ff.gain(-3.0),
+        tw_comp * (ff.analog_hp2(3000, RT2) ** 2) * baffle_step * ff.invert() * ff.gain(-4),
     ]
 
     filters = crossover
@@ -45,9 +55,9 @@ def main():
     run_filter({
         'filters': [numpy.real(f.coefficients) for f in filters],
         'sample_rate': filter_factory.sample_freq,
-        'input_device': 1, # 9 for spdif
+        'input_device': 9, # 1 for analog
         'output_device': 7,
-        'input_scale': 0.4,
+        'input_scale': 0.5,
         'print_debug': True,
         #'wav_file': '/home/axiak/Documents/a2002011001-e02.wav'
     })
