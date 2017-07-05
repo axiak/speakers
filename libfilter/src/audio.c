@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -7,7 +9,11 @@
 #include <signal.h>
 #include <errno.h>
 #include <sys/stat.h>
-
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <inttypes.h>
+#include <stdio.h>
+#include <time.h>
 
 #include "audio.h"
 #include "common.h"
@@ -20,9 +26,26 @@
 
 #define DEBUG_PRINT_INTERVAL_MILLIS (1000)
 #define WAV_BUFFER_SIZE (32768)
+#define INPUT_FORMAT_CHECK_INTERVAL (2000)
 
 
 CircularBuffer * __read_audio_file(AudioOptions audio_options);
+
+
+long currentTimeMillis(void);
+
+typedef struct {
+    CircularBuffer * buffer;
+    volatile long start_time;
+    volatile unsigned long num_frames;
+} RecordCallbackMetadata;
+
+
+typedef struct {
+    CircularBuffer * buffer;
+    int num_output_channels;
+} PlaybackCallbackData;
+
 
 static int recordCallback(const void *input_buffer,
                           void *output_buffer,
@@ -35,7 +58,22 @@ static int recordCallback(const void *input_buffer,
     (void)time_info;
     (void)status_flags;
 
-    CircularBuffer * buffer = (CircularBuffer *)user_data;
+    RecordCallbackMetadata * meta_data = (RecordCallbackMetadata *)user_data;
+
+    meta_data->num_frames += frames_per_buffer;
+
+    /*
+    long current_time = currentTimeMillis();
+    long delta = current_time - meta_data->start_time;
+
+    if (delta >= INPUT_FORMAT_CHECK_INTERVAL) {
+        printf("time delta: %lu, frame delta: %lu\n", delta, meta_data->num_frames);
+        meta_data->num_frames = 0;
+        meta_data->start_time = current_time;
+    }
+    */
+
+    CircularBuffer * buffer = meta_data->buffer;
     const NUMERIC * reader = (const NUMERIC*)input_buffer;
 
 
@@ -45,10 +83,6 @@ static int recordCallback(const void *input_buffer,
 }
 
 
-typedef struct {
-    CircularBuffer * buffer;
-    int num_output_channels;
-} PlaybackCallbackData;
 
 static int playCallback(const void *input_buffer,
                         void *output_buffer,
@@ -98,9 +132,17 @@ int run_filter(AudioOptions audio_options)
 
     int step_size = audio_options.filter_size - 1;
 
+    RecordCallbackMetadata record_data = {
+        NULL,
+        0,
+        0
+    };
 
     if (live_stream) {
         input_buffer = CircularBuffer_create(audio_options.buffer_size);
+
+        record_data.buffer = input_buffer;
+
         input_parameters.device = audio_options.input_device;
         input_parameters.channelCount = 2;
         input_parameters.sampleFormat = PA_SAMPLE_TYPE;
@@ -115,12 +157,14 @@ int run_filter(AudioOptions audio_options)
                             step_size,
                             paNoFlag,
                             recordCallback,
-                            input_buffer
+                            &record_data
                             );
 
         if (err != paNoError) {
             goto done;
         }
+
+        record_data.start_time = currentTimeMillis();
 
 
 #ifdef LINUX_ALSA
@@ -305,6 +349,13 @@ CircularBuffer * __read_audio_file(AudioOptions audio_options)
     return NULL;
 }
 
+long currentTimeMillis(void) {
+    struct timespec tspec;
+    clock_gettime(CLOCK_REALTIME, &tspec);
+    long sec = (int) tspec.tv_sec;
+    int msec = (int) ((double) tspec.tv_nsec) / 1000000.0;
+    return sec * 1000 + msec;
+}
 
 #ifdef AUDIO_MAIN
 
@@ -342,6 +393,4 @@ int main(int argc, char ** argv)
 
     return ret_val;
 }
-
-
 #endif
