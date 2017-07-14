@@ -21,6 +21,7 @@ typedef struct {
     pthread_t parent_thread_ident;
     int number_of_channels;
     int enabled_channels;
+    int decode_input;
 } AudioOptions;
 
 

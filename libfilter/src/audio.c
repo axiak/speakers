@@ -17,6 +17,7 @@
 
 #include "audio.h"
 #include "common.h"
+#include "decoding.h"
 #include "circular_buffer.h"
 #include "os_filter.h"
 
@@ -130,6 +131,9 @@ int run_filter(AudioOptions audio_options)
     PaError err = paNoError;
     CircularBuffer * output_buffer = CircularBuffer_create(audio_options.buffer_size);
     CircularBuffer * input_buffer = NULL;
+    CircularBuffer * decoder_input = NULL;
+    DecodingBuffer * decoder_buffer = NULL;
+
     int live_stream = !audio_options.wav_path || !strlen(audio_options.wav_path);
 
     OSFilter * filter =
@@ -191,7 +195,17 @@ int run_filter(AudioOptions audio_options)
     if (live_stream) {
         input_buffer = CircularBuffer_create(audio_options.buffer_size);
 
-        record_data.buffer = input_buffer;
+        if (audio_options.decode_input) {
+            decoder_input = CircularBuffer_create(audio_options.buffer_size);
+            decoder_buffer = Decoding_new(decoder_input, input_buffer);
+            record_data.buffer = decoder_input;
+            if (!Decoding_start_ac3(decoder_buffer)) {
+                printf("Failed to start ac3 decoder thread.\n");
+                goto done;
+            }
+        } else {
+            record_data.buffer = input_buffer;
+        }
 
         input_parameters.device = audio_options.input_device;
         input_parameters.channelCount = 2;
@@ -324,6 +338,13 @@ done:
         CircularBuffer_destroy(input_buffer);
     }
     CircularBuffer_destroy(output_buffer);
+    if (decoder_input) {
+        CircularBuffer_destroy(decoder_input);
+    }
+    if (decoder_buffer) {
+        Decoding_free(decoder_buffer);
+    }
+
     OSFilter_destroy(filter);
 
     if (err != paNoError) {

@@ -15,7 +15,6 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <time.h>
-#include <libavutil/opt.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/mathematics.h>
 #include <libavutil/samplefmt.h>
@@ -116,7 +115,7 @@ void * DecoderThread(void * buffer_void)
 }
 
 
-pthread_t start_decoder_ac3(DecodingBuffer * decoding_buffer)
+pthread_t Decoding_start_ac3(DecodingBuffer * decoding_buffer)
 {
     int rc;
     if ((rc = pthread_create(&decoding_buffer->thread_id, NULL, DecoderThread, (void *)decoding_buffer))) {
@@ -124,13 +123,13 @@ pthread_t start_decoder_ac3(DecodingBuffer * decoding_buffer)
         return NULL;
     }
 
+    pthread_detatch(decoding_buffer->thread_id);
+
     return decoding_buffer->thread_id;
 }
 
 
-
-
-DecodingBuffer * new_buffer(CircularBuffer * input, CircularBuffer * output)
+DecodingBuffer * Decoding_new(CircularBuffer * input, CircularBuffer * output)
 {
     DecodingBuffer * buffer = (DecodingBuffer *)malloc(sizeof(DecodingBuffer));
     if (buffer == NULL) {
@@ -144,7 +143,8 @@ DecodingBuffer * new_buffer(CircularBuffer * input, CircularBuffer * output)
 }
 
 
-void free_buffer(DecodingBuffer * buffer)
+void Decoding_free(DecodingBuffer * buffer)
+
 {
     if (buffer != NULL) {
         free(buffer);
@@ -162,7 +162,7 @@ int is_stopped(DecodingBuffer * buffer)
 }
 
 
-void stop_decoder(DecodingBuffer * buffer)
+void Decoding_stop(DecodingBuffer * buffer)
 {
     pthread_mutex_lock(&buffer->stop_mutex);
     buffer->stop = 1;

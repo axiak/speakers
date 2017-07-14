@@ -13,9 +13,9 @@ typedef struct {
 } DecodingBuffer;
 
 
-DecodingBuffer * new_buffer(CircularBuffer * input, CircularBuffer * output);
-void free_buffer(DecodingBuffer * buffer);
-void stop_decoder(DecodingBuffer * buffer);
+DecodingBuffer * Decoding_new(CircularBuffer * input, CircularBuffer * output);
+void Decoding_free(DecodingBuffer * buffer);
+void Decoding_stop(DecodingBuffer * buffer);
 
-pthread_t start_decoder_ac3(DecodingBuffer * decoding_buffer);
+pthread_t Decoding_start_ac3(DecodingBuffer * decoding_buffer);
 
