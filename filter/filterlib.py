@@ -32,6 +32,7 @@ typedef struct {
     long parent_thread_ident;
     int number_of_channels;
     int enabled_channels;
+    int decode_input;
 } AudioOptions;
 
 int run_filter(AudioOptions audioOptions);
@@ -80,7 +81,8 @@ def run_filter(options):
             float(options.get('lag_reset_limit', 0.10)),
             thread.get_ident(),
             int(options.get('input_channels', 2)),
-            compute_enabled_channels(options.get('enabled_channels', ()))
+            compute_enabled_channels(options.get('enabled_channels', ())),
+            int(options.get('decode_input'))
         ))
 
     t = threading.Thread(target=actually_run)

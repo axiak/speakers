@@ -24,4 +24,4 @@ install-deps-apt:
 		libfftw3-dev libfftw3-bin libfftw3-single3 \
 		python-pyalsa python-numpy python-scipy python-matplotlib python-matplotlib-data \
 		ipython python-cffi python-leveldb libsndfile1-dev \
-		python-virtualenv python-cvxopt
+		python-virtualenv python-cvxopt libavcodec-dev
