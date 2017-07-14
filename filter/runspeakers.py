@@ -29,8 +29,10 @@ def main():
         'sample_rate': filter_factory.sample_freq,
         'input_device': 9, # 1 for analog
         'output_device': 7,
-        'input_scale': .3,
+        'input_scale': .17,
         'print_debug': True,
+        'input_channels': 2,
+        #'enabled_channels': (1, 2),
         #'wav_file': '/home/axiak/Documents/a2002011001-e02.wav'
     })
 

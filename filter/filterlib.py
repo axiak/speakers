@@ -30,8 +30,9 @@ typedef struct {
     const char * wav_file;
     float lag_reset_limit;
     long parent_thread_ident;
+    int number_of_channels;
+    int enabled_channels;
 } AudioOptions;
-
 
 int run_filter(AudioOptions audioOptions);
 """)
@@ -77,7 +78,9 @@ def run_filter(options):
             float(options.get('input_scale', 0.707)),
             wav_file,
             float(options.get('lag_reset_limit', 0.10)),
-            thread.get_ident()
+            thread.get_ident(),
+            int(options.get('input_channels', 2)),
+            compute_enabled_channels(options.get('enabled_channels', ()))
         ))
 
     t = threading.Thread(target=actually_run)
@@ -86,6 +89,13 @@ def run_filter(options):
     t.start()
     while t.is_alive():
         t.join(0.10)
+
+
+def compute_enabled_channels(enabled_channels):
+    result = 0
+    for channel in enabled_channels:
+        result |= (1 << channel)
+    return result
 
 
 def wait_if_necessary():

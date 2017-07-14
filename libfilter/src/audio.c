@@ -38,6 +38,9 @@ typedef struct {
     CircularBuffer * buffer;
     volatile long start_time;
     volatile unsigned long num_frames;
+    int number_of_channels;
+    int enabled_channels;
+    int stripe_input;
 } RecordCallbackMetadata;
 
 
@@ -62,22 +65,38 @@ static int recordCallback(const void *input_buffer,
 
     meta_data->num_frames += frames_per_buffer;
 
-    /*
     long current_time = currentTimeMillis();
     long delta = current_time - meta_data->start_time;
 
     if (delta >= INPUT_FORMAT_CHECK_INTERVAL) {
-        printf("time delta: %lu, frame delta: %lu\n", delta, meta_data->num_frames);
+        printf("time delta: %lu, frames_per_buffer: %lu, frame delta: %lu, InputUnderflow: %d, InputOverflow: %d, OutputUnderflow: %d, OutputOverflow: %d, outputtonow: %f, nowtoinput: %f\n",
+               delta,
+               frames_per_buffer,
+               meta_data->num_frames,
+               (status_flags & paInputUnderflow) != 0,
+               (status_flags & paInputOverflow) != 0,
+               (status_flags & paOutputUnderflow) != 0,
+               (status_flags & paOutputOverflow) != 0,
+               time_info->outputBufferDacTime - time_info->currentTime,
+               time_info->currentTime - time_info->inputBufferAdcTime
+               );
         meta_data->num_frames = 0;
         meta_data->start_time = current_time;
     }
-    */
 
     CircularBuffer * buffer = meta_data->buffer;
     const NUMERIC * reader = (const NUMERIC*)input_buffer;
 
 
-    CircularBuffer_produce_blocking(buffer, reader, frames_per_buffer * 2);
+    if (meta_data->stripe_input) {
+        CircularBuffer_produce_blocking_striped(buffer,
+                                                reader,
+                                                frames_per_buffer,
+                                                meta_data->number_of_channels,
+                                                meta_data->enabled_channels);
+    } else {
+        CircularBuffer_produce_blocking(buffer, reader, frames_per_buffer * meta_data->number_of_channels);
+    }
 
     return paContinue;
 }
@@ -135,8 +154,39 @@ int run_filter(AudioOptions audio_options)
     RecordCallbackMetadata record_data = {
         NULL,
         0,
+        0,
+        audio_options.number_of_channels,
+        audio_options.enabled_channels,
         0
     };
+
+    {
+        int num_enabled_channels = 0;
+
+        for (int i = 0; i < audio_options.number_of_channels; ++i) {
+            if (audio_options.enabled_channels & (1 << i)) {
+                num_enabled_channels++;
+            }
+        }
+        if (num_enabled_channels != audio_options.enabled_channels) {
+            record_data.stripe_input = 1;
+        }
+        if (num_enabled_channels == 0) {
+            record_data.stripe_input = 0;
+        }
+    }
+
+    if (record_data.stripe_input) {
+        printf("striping record_data: %d channels with %d enabled flag\n",
+               record_data.number_of_channels,
+               record_data.enabled_channels
+               );
+    } else {
+        printf("NOT striping record_data: %d channels with %d enabled flag\n",
+               record_data.number_of_channels,
+               record_data.enabled_channels
+               );
+    }
 
     if (live_stream) {
         input_buffer = CircularBuffer_create(audio_options.buffer_size);

@@ -50,6 +50,39 @@ void CircularBuffer_destroy(CircularBuffer * circular_buffer)
 }
 
 
+void CircularBuffer_produce_blocking_striped(CircularBuffer * buf,
+                                             const NUMERIC * data,
+                                             int number_of_frames,
+                                             int stripe_length,
+                                             int enabled_channels_flags)
+{
+    int enabled_stripes = 0;
+    for (int i = 0; i < stripe_length; ++i) {
+        if (enabled_channels_flags & (1 << i)) {
+            ++enabled_stripes;
+        }
+    }
+
+    int effective_length = number_of_frames * enabled_stripes;
+
+    int start_index = __index(buf, buf->offset_producer);
+    pthread_mutex_unlock(&buf->offset_mutex);
+
+    for (int frame = 0; frame < number_of_frames; ++frame) {
+        for (int channel = 0; channel < stripe_length; ++channel) {
+            if (enabled_channels_flags & (1 << channel)) {
+                buf->data[__index(buf, start_index)] = data[frame + channel];
+                ++start_index;
+            }
+        }
+    }
+    plock(&buf->offset_mutex);
+    buf->offset_producer += effective_length;
+    pthread_cond_signal(&buf->offset_condition);
+    pthread_mutex_unlock(&buf->offset_mutex);
+}
+
+
 bool CircularBuffer_produce(CircularBuffer * buf, const NUMERIC * data, int length)
 {
     plock(&buf->offset_mutex);

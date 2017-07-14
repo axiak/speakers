@@ -21,6 +21,11 @@ void CircularBuffer_destroy(CircularBuffer * circular_buffer);
 
 bool CircularBuffer_produce(CircularBuffer * circular_buffer, const NUMERIC * data, int length);
 void CircularBuffer_produce_blocking(CircularBuffer * circular_buffer, const NUMERIC * data, int length);
+void CircularBuffer_produce_blocking_striped(CircularBuffer * buf,
+                                             const NUMERIC * data,
+                                             int number_of_frames,
+                                             int stripe_length,
+                                             int enabled_channels_flags);
 
 bool CircularBuffer_consume(CircularBuffer * circular_buffer, NUMERIC * target, int length, int preamble);
 void CircularBuffer_consume_blocking(CircularBuffer * circular_buffer, NUMERIC * target, int length, int preamble);

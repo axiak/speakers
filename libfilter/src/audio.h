@@ -19,6 +19,8 @@ typedef struct {
     const char * wav_path;
     float lag_reset_limit;
     pthread_t parent_thread_ident;
+    int number_of_channels;
+    int enabled_channels;
 } AudioOptions;
 
 
