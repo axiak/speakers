@@ -9,7 +9,7 @@ SRC = ./src
 OPTFLAGS = -O3 -ffast-math
 DEBUG_FLAGS = -g -O0
 
-LIBS = -lfftw3f -lportaudio -lm -lsndfile
+LIBS = -lfftw3f -lportaudio -lm -lsndfile -lffmpeg
 
 ARCH_FLAGS = $(shell ./gen_arch_flags.sh)
 
@@ -33,8 +33,12 @@ circular_buffer.o: $(SRC)/circular_buffer.c $(SRC)/circular_buffer.h target
 audio.o: $(SRC)/audio.c $(SRC)/audio.h target
 	$(CC) $(WFLAGS) $(OPTFLAGS) $(ARCH_FLAGS) -c $(SRC)/audio.c -o ./target/audio.o
 
+decoding.o: $(SRC)/decoding.c $(SRC)/decoding.h target
+	$(CC) $(WFLAGS) $(OPTFLAGS) $(ARCH_FLAGS) -c $(SRC)/decoding.c -o ./target/decoding.o
+
 os_filter.o: $(SRC)/os_filter.c $(SRC)/os_filter.h target
 	$(CC) $(WFLAGS) $(OPTFLAGS) $(ARCH_FLAGS) -c $(SRC)/os_filter.c -o ./target/os_filter.o
+
 
 circular_buffer_test: $(SRC)/circular_buffer.* target
 	$(CC) -DBUFFER_MAIN $(WFLAGS) $(DEBUG_FLAGS) $(ARCH_FLAGS) $(SRC)/circular_buffer.c -o ./target/circular_buffer_test $(LIBS)
@@ -50,5 +54,5 @@ osfilter_test_debug: os_filter.* target
 	$(CC) -DOSFILTER_MAIN $(WFLAGS) $(DEBUG_FLAGS) $(ARCH_FLAGS) $(SRC)/os_filter.c $(SRC)/vector.c $(SRC)/circular_buffer.c -o ./target/osfilter_test_debug $(LIBS)
 
 
-libfilter: vector.o circular_buffer.o audio.o os_filter.o
+libfilter: vector.o circular_buffer.o audio.o os_filter.o decoding.o
 	$(CC) $(WFLAGS) $(OPTFLAGS) $(ARCH_FLAGS) -shared ./target/*.o -o ./target/libfilter.so
