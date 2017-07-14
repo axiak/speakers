@@ -87,7 +87,7 @@ void * DecoderThread(void * buffer_void)
             int data_size = av_samples_get_buffer_size(NULL, c->channels,
                                                        decoded_frame->nb_samples,
                                                        c->sample_fmt, 1);
-            CircularBuffer_produce_blocking(buffer->output, decoded_frame->data, data_size / sizeof(NUMERIC));
+            CircularBuffer_produce_blocking(buffer->output, decoded_frame->data[0], data_size / sizeof(NUMERIC));
         }
         avpkt.size -= len;
         avpkt.data += len;
@@ -117,13 +117,14 @@ void * DecoderThread(void * buffer_void)
 
 pthread_t Decoding_start_ac3(DecodingBuffer * decoding_buffer)
 {
+    avcodec_register_all();
     int rc;
     if ((rc = pthread_create(&decoding_buffer->thread_id, NULL, DecoderThread, (void *)decoding_buffer))) {
         printf("ERROR: failed to spawn decoder thread: %d\n", rc);
-        return NULL;
+        return 0;
     }
 
-    pthread_detatch(decoding_buffer->thread_id);
+    pthread_detach(decoding_buffer->thread_id);
 
     return decoding_buffer->thread_id;
 }

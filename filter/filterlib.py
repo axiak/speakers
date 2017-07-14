@@ -41,6 +41,7 @@ int run_filter(AudioOptions audioOptions);
 CDLL(find_library("portaudio"), mode=RTLD_GLOBAL)
 CDLL(find_library("fftw3f"), mode=RTLD_GLOBAL)
 CDLL(find_library("sndfile"), mode=RTLD_GLOBAL)
+CDLL(find_library("avcodec"), mode=RTLD_GLOBAL)
 
 C = ffi.dlopen(
     os.path.join(os.path.dirname(__file__), '..', 'libfilter', 'target', 'libfilter.so'),
@@ -82,7 +83,7 @@ def run_filter(options):
             thread.get_ident(),
             int(options.get('input_channels', 2)),
             compute_enabled_channels(options.get('enabled_channels', ())),
-            int(options.get('decode_input'))
+            int(options.get('decode_input', 0))
         ))
 
     t = threading.Thread(target=actually_run)
